@@ -1,0 +1,23 @@
+node_modules
+.nuxt
+.output
+.wrangler
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+.env
+.env.*
+!.env.example
+*.tfplan
+crash.log
+*.tfvars.json
+*.tfstate
+*.tfstate.*
+.terraform/
+
+# Terraform local state and local variable values
+iac/.terraform/
+iac/terraform.tfstate
+iac/terraform.tfstate.*
+iac/*.tfvars
+!iac/*.tfvars.example

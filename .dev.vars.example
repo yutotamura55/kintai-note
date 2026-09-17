@@ -1,0 +1,5 @@
+# Local development only. Do not commit .dev.vars.
+# Use your deployed hostname without protocol for production.
+RP_ID=localhost
+# Used exactly once to create the first administrator using /api/admin/bootstrap.
+BOOTSTRAP_TOKEN=replace-with-a-long-random-value
