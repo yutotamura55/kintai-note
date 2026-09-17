@@ -1,0 +1,4 @@
+# Do not put the API token in this file. Export CLOUDFLARE_API_TOKEN instead.
+cloudflare_account_id     = "replace-with-your-account-id"
+d1_database_name         = "kintai-note"
+d1_primary_location_hint = "apac"

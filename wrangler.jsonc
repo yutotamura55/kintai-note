@@ -1,0 +1,16 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "kintai-note",
+  "main": ".output/server/index.mjs",
+  "compatibility_date": "2026-09-16",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true,
+    "logs": { "enabled": true, "head_sampling_rate": 1 },
+    "traces": { "enabled": true, "head_sampling_rate": 0.01 }
+  },
+  "assets": { "directory": ".output/public" },
+  "d1_databases": [
+    { "binding": "DB", "database_name": "kintai-note", "database_id": "fafe0636-627d-415c-9007-01d110ff253c" }
+  ]
+}
