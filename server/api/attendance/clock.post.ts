@@ -3,7 +3,7 @@ import { db, id } from '~~/server/utils/db'
 import { openAttendance } from '~~/server/utils/attendance'
 import { workDateAt } from '~~/shared/utils/attendance'
 export default defineEventHandler(async (event) => {
-  const user = await currentUser(event); const { action } = await readBody(event) || {}
+  const user = await currentUser(event); const { action, recordId } = await readBody(event) || {}
   if (!['in', 'out'].includes(action)) throw createError({ statusCode: 400, statusMessage: '不正な打刻です。' })
   const instant = new Date(); const date = workDateAt(instant); const now = instant.toISOString()
   if (action === 'in') {
@@ -20,10 +20,12 @@ export default defineEventHandler(async (event) => {
         : 'この勤務日はすでに出勤済みです。' })
     }
   } else {
-    const record = await openAttendance(event, user.id)
-    if (!record) throw createError({ statusCode: 409, statusMessage: '退勤を記録できる状態ではありません。' })
+    if (typeof recordId !== 'string' || !recordId.trim()) {
+      throw createError({ statusCode: 400, statusMessage: '退勤対象がありません。画面を再読み込みして確認してください。' })
+    }
+    // Never resolve a different open shift for a stale or retried request.
     const result = await db(event).prepare(`UPDATE attendance_records SET clock_out_at=?1, updated_at=?1
-      WHERE id=?2 AND user_id=?3 AND clock_out_at IS NULL AND clock_in_at < ?1`).bind(now, record.id, user.id).run()
+      WHERE id=?2 AND user_id=?3 AND clock_out_at IS NULL AND clock_in_at < ?1`).bind(now, recordId, user.id).run()
     if (!result.meta.changes) throw createError({ statusCode: 409, statusMessage: '記録が更新されたか、出勤日時が現在以降です。画面を更新して確認してください。' })
   }
   return { ok: true }
