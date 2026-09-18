@@ -10,6 +10,7 @@
     "db:apply": "wrangler d1 execute kintai-note --remote --file=db/schema.sql",
     "db:local:seed": "wrangler d1 execute kintai-note --local --file=db/seed.local.sql",
     "db:local:cleanup": "wrangler d1 execute kintai-note --local --file=db/cleanup.local.sql",
+    "test:unit": "node --experimental-strip-types --test tests/*.test.ts",
     "test:local": "node scripts/test-local.mjs"
   },
   "dependencies": {
