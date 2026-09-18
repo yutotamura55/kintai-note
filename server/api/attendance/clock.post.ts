@@ -23,10 +23,13 @@ export default defineEventHandler(async (event) => {
     if (typeof recordId !== 'string' || !recordId.trim()) {
       throw createError({ statusCode: 400, statusMessage: '退勤対象がありません。画面を再読み込みして確認してください。' })
     }
-    // Never resolve a different open shift for a stale or retried request.
+    // Keep the requested ID and enforce oldest-first atomically (same ordering as openAttendance).
     const result = await db(event).prepare(`UPDATE attendance_records SET clock_out_at=?1, updated_at=?1
-      WHERE id=?2 AND user_id=?3 AND clock_out_at IS NULL AND clock_in_at < ?1`).bind(now, recordId, user.id).run()
-    if (!result.meta.changes) throw createError({ statusCode: 409, statusMessage: '記録が更新されたか、出勤日時が現在以降です。画面を更新して確認してください。' })
+      WHERE id=?2 AND user_id=?3 AND clock_out_at IS NULL AND clock_in_at < ?1
+      AND id=(SELECT id FROM attendance_records
+        WHERE user_id=?3 AND clock_in_at IS NOT NULL AND clock_out_at IS NULL
+        ORDER BY clock_in_at, id LIMIT 1)`).bind(now, recordId, user.id).run()
+    if (!result.meta.changes) throw createError({ statusCode: 409, statusMessage: '記録が更新されたか、先に退勤すべき勤務があるか、出勤日時が現在以降です。画面を更新して確認してください。' })
   }
   return { ok: true }
 })

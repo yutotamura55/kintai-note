@@ -132,6 +132,21 @@ try {
   assert((await clock('in')).status === 409, 'Completed shift must not be overwritten by clock-in.')
   const noAuthClock = await fetch(`${baseUrl}/api/attendance/clock`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'in' }) })
   assert(noAuthClock.status === 401, 'Clock-in must require authentication.')
+  // Legacy data can contain several open shifts; reject out-of-order IDs without fallback.
+  for (const sameTime of [false, true]) {
+    await run(process.execPath, [wrangler, 'd1', 'execute', 'kintai-note', '--local', '--command',
+      `INSERT INTO attendance_records (id, user_id, work_date, clock_in_at) VALUES
+       ('local-test-oldest-a', 'local-test-attendance-user', '1999-01-01', '1999-01-01T00:00:00.000Z'),
+       ('local-test-oldest-b', 'local-test-attendance-user', '1999-01-02', '${sameTime ? '1999-01-01' : '1999-01-02'}T00:00:00.000Z')`])
+    assert((await clock('out', 'local-test-oldest-b')).status === 409, 'Newer legacy shift must not close before the oldest.')
+    const pending = (await (await request('/api/attendance/month?month=1999-01')).json()).results
+    assert(pending.length === 2 && pending.every(row => row.clock_out_at === null), 'Rejected out-of-order clock-out changed a record.')
+    assert((await clock('out', 'local-test-oldest-a')).status === 200, 'Oldest legacy shift must close first.')
+    assert((await clock('out', 'local-test-oldest-a')).status === 409, 'Retry must not fall back to the next legacy shift.')
+    assert((await clock('out', 'local-test-oldest-b')).status === 200, 'Next legacy shift must close after the oldest.')
+    await run(process.execPath, [wrangler, 'd1', 'execute', 'kintai-note', '--local', '--command',
+      "DELETE FROM attendance_records WHERE user_id='local-test-attendance-user' AND id IN ('local-test-oldest-a','local-test-oldest-b')"])
+  }
   console.log('PASS: unit boundaries, attendance edits, overnight/legacy shifts, unfinished guards, concurrent clock-in, monthly PDF and authentication.')
 } finally {
   if (worker?.pid && worker.exitCode === null) {
