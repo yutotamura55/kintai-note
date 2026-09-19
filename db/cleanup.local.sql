@@ -2,3 +2,6 @@
 DELETE FROM sessions WHERE id = 'local-test-attendance-session';
 DELETE FROM attendance_records WHERE user_id = 'local-test-attendance-user';
 DELETE FROM users WHERE id = 'local-test-attendance-user';
+
+DELETE FROM sessions WHERE id = 'local-test-other-session';
+DELETE FROM users WHERE id = 'local-test-other-user';

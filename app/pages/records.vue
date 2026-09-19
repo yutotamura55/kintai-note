@@ -16,9 +16,77 @@ async function save(record: Record) {
   catch (cause: any) { error.value = cause?.data?.statusMessage || '記録を更新できませんでした。' }
   finally { saving.value = false }
 }
+function canRestore(record: Record) {
+  return !!((record.original_clock_in_at && record.original_clock_in_at !== record.clock_in_at)
+    || (record.original_clock_out_at && record.original_clock_out_at !== record.clock_out_at))
+}
+async function restore(record: Record) {
+  if (saving.value) return
+  saving.value = true; error.value = ''
+  try {
+    await $fetch('/api/attendance/restore', { method: 'POST', body: { id: record.id } })
+    await load(); editing.value = null
+  } catch (cause: any) {
+    error.value = cause?.data?.statusMessage || '元の打刻時刻に戻せませんでした。'
+  } finally { saving.value = false }
+}
 await load()
 const requestedRecord = records.value.find(record => record.id === route.query.edit)
 if (requestedRecord) edit(requestedRecord)
 watch(month, async () => { cancel(); await load() })
 </script>
-<template><main class="app-shell"><NuxtLink class="back" to="/dashboard">← ダッシュボード</NuxtLink><header><div><p class="eyebrow">RECORDS</p><h1>月別の勤怠</h1></div><button class="secondary" @click="pdf">PDFをダウンロード</button></header><p>勤務日を基準に月別表示します（日本時間・午前4時区切り）。日時を編集しても勤務日は変更されません。</p><p>翌日以降に退勤した場合は、実際の退勤日も指定してください。</p><input v-model="month" type="month" class="month"/><p v-if="error" class="error">{{ error }}</p><section class="card table-card"><table><thead><tr><th>勤務日</th><th>出勤日時（日本時間）</th><th>退勤日時（日本時間）</th><th></th></tr></thead><tbody><template v-for="record in records" :key="record.id"><tr><td>{{ record.work_date }}</td><td>{{ displayJapanDateTime(record.clock_in_at) }}</td><td>{{ displayJapanDateTime(record.clock_out_at) }}</td><td><button class="text-button" @click="edit(record)">編集</button></td></tr><tr v-if="editing === record.id" class="edit-row"><td>{{ record.work_date }}</td><td><input v-model="draft.clockIn" type="datetime-local" required aria-label="出勤日時（日本時間）" /></td><td><input v-model="draft.clockOut" type="datetime-local" aria-label="退勤日時（日本時間）" /></td><td class="edit-actions"><button class="primary" :disabled="saving" @click="save(record)">{{ saving ? '保存中…' : '保存' }}</button><button class="text-button" :disabled="saving" @click="cancel">取消</button></td></tr></template><tr v-if="!records.length"><td colspan="4">この月の記録はありません。</td></tr></tbody></table></section></main></template>
+<template>
+  <main class="app-shell">
+    <NuxtLink class="back" to="/dashboard">← ダッシュボード</NuxtLink>
+    <header>
+      <div><p class="eyebrow">RECORDS</p><h1>月別の勤怠</h1></div>
+      <button class="secondary" @click="pdf">PDFをダウンロード</button>
+    </header>
+    <p>勤務日を基準に月別表示します（日本時間・午前4時区切り）。日時を編集しても勤務日は変更されません。</p>
+    <p>翌日以降に退勤した場合は、実際の退勤日も指定してください。</p>
+    <p>元の打刻時刻がある項目は、編集後も元に戻せます。元の時刻がない項目は変更しません。</p>
+    <input v-model="month" type="month" class="month" :disabled="saving" />
+    <p v-if="error" class="error" role="alert">{{ error }}</p>
+    <section class="card table-card">
+      <table>
+        <thead><tr><th>勤務日</th><th>出勤日時（日本時間）</th><th>退勤日時（日本時間）</th><th></th></tr></thead>
+        <tbody>
+          <template v-for="record in records" :key="record.id">
+            <tr>
+              <td>{{ record.work_date }}</td>
+              <td>
+                {{ displayJapanDateTime(record.clock_in_at) }}
+                <small class="original-time">{{ record.original_clock_in_at ? `元の打刻：${displayJapanDateTime(record.original_clock_in_at, true)}` : '元の打刻時刻なし' }}</small>
+              </td>
+              <td>
+                {{ displayJapanDateTime(record.clock_out_at) }}
+                <small class="original-time">{{ record.original_clock_out_at ? `元の打刻：${displayJapanDateTime(record.original_clock_out_at, true)}` : '元の打刻時刻なし' }}</small>
+              </td>
+              <td>
+                <button class="text-button" :disabled="saving" @click="edit(record)">編集</button>
+                <template v-if="record.original_clock_in_at || record.original_clock_out_at">
+                  <button class="text-button" :disabled="saving || !canRestore(record)" @click="restore(record)">元の打刻時刻に戻す</button>
+                  <small class="original-time">復元対象：{{ record.original_clock_in_at && record.original_clock_out_at ? '出勤・退勤' : record.original_clock_in_at ? '出勤のみ' : '退勤のみ' }}</small>
+                </template>
+              </td>
+            </tr>
+            <tr v-if="editing === record.id" class="edit-row">
+              <td>{{ record.work_date }}</td>
+              <td><input v-model="draft.clockIn" type="datetime-local" required :disabled="saving" aria-label="出勤日時（日本時間）" /></td>
+              <td><input v-model="draft.clockOut" type="datetime-local" :disabled="saving" aria-label="退勤日時（日本時間）" /></td>
+              <td class="edit-actions">
+                <button class="primary" :disabled="saving" @click="save(record)">{{ saving ? '保存中…' : '保存' }}</button>
+                <button class="text-button" :disabled="saving" @click="cancel">取消</button>
+              </td>
+            </tr>
+          </template>
+          <tr v-if="!records.length"><td colspan="4">この月の記録はありません。</td></tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
+</template>
+
+<style scoped>
+.original-time { display: block; margin-top: .4rem; font-size: .75rem; color: #526476; }
+</style>
