@@ -5,6 +5,8 @@ export interface AttendanceRecord {
   work_date: string
   clock_in_at: string | null
   clock_out_at: string | null
+  original_clock_in_at: string | null
+  original_clock_out_at: string | null
 }
 
 // Japan has no daylight saving time. Shift JST back four hours before taking the date.
@@ -16,7 +18,8 @@ export function japanDateTime(value: string | null | undefined): string {
   return value ? new Date(new Date(value).getTime() + 9 * HOUR).toISOString().slice(0, 16) : ''
 }
 
-export function displayJapanDateTime(value: string | null | undefined): string {
+export function displayJapanDateTime(value: string | null | undefined, includeSeconds = false): string {
+  if (value && includeSeconds) return new Date(new Date(value).getTime() + 9 * HOUR).toISOString().slice(0, 23).replace('T', ' ')
   return japanDateTime(value).replace('T', ' ') || '—'
 }
 
