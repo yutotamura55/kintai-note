@@ -1,3 +1,4 @@
+-- Baseline schema. Apply migrations/ afterward (npm run db:local:apply or db:apply).
 PRAGMA foreign_keys = ON;
 
 CREATE TABLE IF NOT EXISTS users (

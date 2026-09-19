@@ -7,11 +7,12 @@
     "build": "nuxt build",
     "preview": "wrangler dev",
     "deploy": "nuxt build && wrangler deploy",
-    "db:apply": "wrangler d1 execute kintai-note --remote --file=db/schema.sql",
+    "db:apply": "wrangler d1 execute kintai-note --remote --file=db/schema.sql && wrangler d1 migrations apply kintai-note --remote",
     "db:local:seed": "wrangler d1 execute kintai-note --local --file=db/seed.local.sql",
     "db:local:cleanup": "wrangler d1 execute kintai-note --local --file=db/cleanup.local.sql",
     "test:unit": "node --experimental-strip-types --test tests/*.test.ts",
-    "test:local": "node scripts/test-local.mjs"
+    "test:local": "node scripts/test-local.mjs",
+    "db:local:apply": "wrangler d1 execute kintai-note --local --file=db/schema.sql && wrangler d1 migrations apply kintai-note --local"
   },
   "dependencies": {
     "@simplewebauthn/browser": "^13.1.1",

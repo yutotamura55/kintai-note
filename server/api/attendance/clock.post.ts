@@ -8,10 +8,10 @@ export default defineEventHandler(async (event) => {
   const instant = new Date(); const date = workDateAt(instant); const now = instant.toISOString()
   if (action === 'in') {
     // Guard and write in one statement: concurrent requests cannot overwrite a clock-in.
-    const result = await db(event).prepare(`INSERT INTO attendance_records (id, user_id, work_date, clock_in_at, updated_at)
-      SELECT ?1, ?2, ?3, ?4, ?4 WHERE NOT EXISTS (
+    const result = await db(event).prepare(`INSERT INTO attendance_records (id, user_id, work_date, clock_in_at, original_clock_in_at, updated_at)
+      SELECT ?1, ?2, ?3, ?4, ?4, ?4 WHERE NOT EXISTS (
         SELECT 1 FROM attendance_records WHERE user_id=?2 AND clock_in_at IS NOT NULL AND clock_out_at IS NULL
-      ) ON CONFLICT(user_id, work_date) DO UPDATE SET clock_in_at=excluded.clock_in_at, updated_at=excluded.updated_at
+      ) ON CONFLICT(user_id, work_date) DO UPDATE SET clock_in_at=excluded.clock_in_at, original_clock_in_at=COALESCE(attendance_records.original_clock_in_at, excluded.original_clock_in_at), updated_at=excluded.updated_at
       WHERE attendance_records.clock_in_at IS NULL`).bind(id(), user.id, date, now).run()
     if (!result.meta.changes) {
       const open = await openAttendance(event, user.id)
@@ -24,7 +24,7 @@ export default defineEventHandler(async (event) => {
       throw createError({ statusCode: 400, statusMessage: '退勤対象がありません。画面を再読み込みして確認してください。' })
     }
     // Keep the requested ID and enforce oldest-first atomically (same ordering as openAttendance).
-    const result = await db(event).prepare(`UPDATE attendance_records SET clock_out_at=?1, updated_at=?1
+    const result = await db(event).prepare(`UPDATE attendance_records SET clock_out_at=?1, original_clock_out_at=COALESCE(original_clock_out_at, ?1), updated_at=?1
       WHERE id=?2 AND user_id=?3 AND clock_out_at IS NULL AND clock_in_at < ?1
       AND id=(SELECT id FROM attendance_records
         WHERE user_id=?3 AND clock_in_at IS NOT NULL AND clock_out_at IS NULL

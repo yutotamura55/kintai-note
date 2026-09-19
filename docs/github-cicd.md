@@ -43,7 +43,11 @@ production environmentに次も登録します。
 
 ## DB変更
 
-現在のschema.sqlはCREATE TABLE IF NOT EXISTSによる初期スキーマです。デプロイ時に実行しますが、既存テーブルへの列追加などを自動反映するものではありません。今後スキーマを変更する際は、番号付きマイグレーションを導入してください。
+`db/schema.sql` は既存の初期スキーマとして維持し、追加変更は `migrations/` の番号付きSQLに記載します。`npm run db:apply` は初期スキーマの適用後、Wrangler の `d1 migrations apply kintai-note --remote` を実行します。CIはこの処理が成功した後にWorkerをデプロイします。ローカルでは `npm run db:local:apply` を使います。
+
+`0001_original_attendance_times.sql` は初回打刻時刻の2カラムを追加します。既存レコードの時刻は変更せず、初回値は不明（NULL）のまま残します。新規DBにも既存DBにも、同じ「初期スキーマ → マイグレーション」の順で適用してください。`schema.sql` だけでは最新の構造になりません。
+
+[Wranglerのマイグレーション管理](https://developers.cloudflare.com/d1/reference/migrations/)により、適用済みのファイルは再実行されません。適用済みSQLは変更せず、次の番号のファイルを追加してください。今回の変更はカラム追加のみのため、旧Workerも動作できます。ただし旧Workerへ戻すと、その間の打刻には初回値が保存されません。
 
 ## 参考
 

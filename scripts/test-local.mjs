@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process'
 import { once } from 'node:events'
+import { testOriginalTimes } from './test-original-times.mjs'
 
 const cwd = process.cwd()
 const wrangler = new URL('../node_modules/wrangler/bin/wrangler.js', import.meta.url).pathname
@@ -49,8 +50,21 @@ try {
   await run(process.execPath, [wrangler, 'd1', 'execute', 'kintai-note', '--local', '--file', 'db/cleanup.local.sql'])
   await run(process.execPath, [wrangler, 'd1', 'execute', 'kintai-note', '--local', '--file', 'db/seed.local.sql'])
 
+  // Run after seeding to exercise migration of existing records; repeat to check safe reapplication.
+  await run(process.execPath, [wrangler, 'd1', 'migrations', 'apply', 'kintai-note', '--local'])
+  await run(process.execPath, [wrangler, 'd1', 'migrations', 'apply', 'kintai-note', '--local'])
+
   worker = spawn(process.execPath, [wrangler, 'dev', '--local', '--port', '8788'], { cwd, stdio: 'inherit', detached: process.platform !== 'win32' })
   await waitForWorker()
+
+  const missingOriginal = await request('/api/attendance/restore', {
+    method: 'POST', body: JSON.stringify({ id: 'local-test-attendance-record' }),
+  })
+  assert(missingOriginal.status === 409, `Expected restore without original times to return 409, received ${missingOriginal.status}.`)
+
+  const preMigration = (await (await request('/api/attendance/month?month=2026-09')).json()).results.find(row => row.id === 'local-test-attendance-record')
+  assert(preMigration.original_clock_in_at === null && preMigration.original_clock_out_at === null, 'Migration must not backfill unknown original times.')
+  assert(preMigration.clock_in_at === '2026-09-16T00:00:00.000Z' && preMigration.clock_out_at === '2026-09-16T09:00:00.000Z', 'Migration must preserve existing times.')
 
   const update = await request('/api/attendance/record', {
     method: 'PUT',
@@ -132,6 +146,8 @@ try {
   assert((await clock('in')).status === 409, 'Completed shift must not be overwritten by clock-in.')
   const noAuthClock = await fetch(`${baseUrl}/api/attendance/clock`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'in' }) })
   assert(noAuthClock.status === 401, 'Clock-in must require authentication.')
+  await testOriginalTimes({ request, run, wrangler, current, legacyId: record.id })
+
   // Legacy data can contain several open shifts; reject out-of-order IDs without fallback.
   for (const sameTime of [false, true]) {
     await run(process.execPath, [wrangler, 'd1', 'execute', 'kintai-note', '--local', '--command',
