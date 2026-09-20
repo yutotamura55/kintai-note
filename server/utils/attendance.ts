@@ -41,7 +41,14 @@ export async function saveAttendanceTimes(
     }
   }
 
-  const result = await db(event).prepare(`UPDATE attendance_records SET clock_in_at=?1, clock_out_at=?2, break_minutes=?3, updated_at=?4
+  const result = await db(event).prepare(`UPDATE attendance_records SET
+      clock_in_at=?1,
+      clock_out_at=?2,
+      break_minutes=?3,
+      total_break_seconds = total_break_seconds + CASE WHEN ?2 IS NOT NULL AND break_started_at IS NOT NULL THEN max(0, strftime('%s', ?2) - strftime('%s', break_started_at)) ELSE 0 END,
+      original_total_break_seconds = original_total_break_seconds + CASE WHEN ?2 IS NOT NULL AND break_started_at IS NOT NULL THEN max(0, strftime('%s', ?2) - strftime('%s', break_started_at)) ELSE 0 END,
+      break_started_at = CASE WHEN ?2 IS NOT NULL THEN NULL ELSE break_started_at END,
+      updated_at=?4
     WHERE id=?5 AND user_id=?6 AND clock_in_at IS ?7 AND clock_out_at IS ?8
     AND (?2 IS NOT NULL OR NOT EXISTS (
       SELECT 1 FROM attendance_records WHERE user_id=?6 AND id<>?5 AND clock_in_at IS NOT NULL AND clock_out_at IS NULL

@@ -1,19 +1,30 @@
 <script setup lang="ts">
-import { displayJapanDateTime, calculateBreakMinutes, calculateWorkMinutes, formatDurationHuman } from '~~/shared/utils/attendance'
+import { displayJapanDateTime, calculatePunchBreakMinutes, calculatePunchWorkMinutes, formatDurationHuman } from '~~/shared/utils/attendance'
 const router = useRouter(); const today = ref<any>(); const me = ref<any>(); const error = ref(''); const busy = ref(false)
 const loadError = ref(''); const loading = ref(false)
 const api = useRequestFetch()
 const displayedRecord = computed(() => today.value?.openRecord || today.value?.record)
+const punchRecord = computed(() => {
+  const record = displayedRecord.value
+  if (!record) return null
+  return {
+    ...record,
+    clock_in_at: record.original_clock_in_at ?? record.clock_in_at,
+    clock_out_at: record.original_clock_out_at ?? record.clock_out_at,
+    total_break_seconds: record.original_total_break_seconds ?? record.total_break_seconds,
+    break_minutes: null,
+  }
+})
 const previousOpen = computed(() => today.value?.openRecord && today.value.openRecord.work_date !== today.value.date)
 const correctionLink = computed(() => ({ path: '/records', query: {
   month: today.value?.openRecord?.work_date.slice(0, 7), edit: today.value?.openRecord?.id,
 } }))
-const isOnBreak = computed(() => !!displayedRecord.value?.break_started_at && !displayedRecord.value?.clock_out_at)
-const breakMinutes = computed(() => displayedRecord.value ? calculateBreakMinutes(displayedRecord.value) : 0)
-const workMinutes = computed(() => displayedRecord.value ? calculateWorkMinutes(displayedRecord.value) : 0)
+const isOnBreak = computed(() => !!punchRecord.value?.break_started_at && !punchRecord.value?.clock_out_at)
+const breakMinutes = computed(() => punchRecord.value ? calculatePunchBreakMinutes(punchRecord.value) : 0)
+const workMinutes = computed(() => punchRecord.value ? calculatePunchWorkMinutes(punchRecord.value) : 0)
 const statusInfo = computed(() => {
-  if (!displayedRecord.value?.clock_in_at) return { label: '未出勤', class: 'status-default' }
-  if (displayedRecord.value?.clock_out_at) return { label: '退勤済み', class: 'status-done' }
+  if (!punchRecord.value?.clock_in_at) return { label: '未出勤', class: 'status-default' }
+  if (punchRecord.value?.clock_out_at) return { label: '退勤済み', class: 'status-done' }
   if (isOnBreak.value) return { label: '休憩中', class: 'status-break' }
   return { label: '勤務中', class: 'status-working' }
 })
@@ -73,10 +84,10 @@ onUnmounted(() => { clearInterval(refreshTimer); window.removeEventListener('foc
       </div>
       <p v-if="displayedRecord">表示中の勤務日：{{ displayedRecord.work_date }}</p>
       <div class="times">
-        <div><span>出勤（日本時間）</span><strong>{{ displayJapanDateTime(displayedRecord?.clock_in_at) }}</strong></div>
-        <div><span>退勤（日本時間）</span><strong>{{ displayJapanDateTime(displayedRecord?.clock_out_at) }}</strong></div>
-        <div><span>休憩時間</span><strong>{{ displayedRecord?.clock_in_at ? formatDurationHuman(breakMinutes) : '—' }}</strong></div>
-        <div><span>実労働時間</span><strong>{{ displayedRecord?.clock_in_at ? formatDurationHuman(workMinutes) : '—' }}</strong></div>
+        <div><span>出勤（日本時間）</span><strong>{{ displayJapanDateTime(punchRecord?.clock_in_at) }}</strong></div>
+        <div><span>退勤（日本時間）</span><strong>{{ displayJapanDateTime(punchRecord?.clock_out_at) }}</strong></div>
+        <div><span>休憩時間</span><strong>{{ punchRecord?.clock_in_at ? formatDurationHuman(breakMinutes) : '—' }}</strong></div>
+        <div><span>実労働時間</span><strong>{{ punchRecord?.clock_in_at ? formatDurationHuman(workMinutes) : '—' }}</strong></div>
       </div>
       <div class="actions">
         <button class="primary" :disabled="busy || loading || !!today.record?.clock_in_at" @click="clock('in')">出勤を記録</button>

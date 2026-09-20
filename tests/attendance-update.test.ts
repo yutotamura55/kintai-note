@@ -40,3 +40,25 @@ test('a stale edit or restoration cannot overwrite a concurrent clock-out', asyn
     assert.equal(sqlite.prepare('SELECT break_minutes FROM attendance_records WHERE id=?').get('a')!.break_minutes, 30)
   } finally { sqlite.close() }
 })
+
+test('manual clock-out finalizes an active punch break', async () => {
+  const sqlite = new DatabaseSync(':memory:')
+  try {
+    sqlite.exec(readFileSync(new URL('../db/schema.sql', import.meta.url), 'utf8'))
+    for (const file of readdirSync(new URL('../migrations/', import.meta.url)).filter(name => name.endsWith('.sql')).sort()) {
+      sqlite.exec(readFileSync(new URL(`../migrations/${file}`, import.meta.url), 'utf8'))
+    }
+    sqlite.exec(`INSERT INTO users (id,employee_code,display_name) VALUES ('u2','u2','U2');
+      INSERT INTO attendance_records (id,user_id,work_date,clock_in_at,break_started_at)
+      VALUES ('active-break','u2','2026-09-19','2026-09-19T00:00:00.000Z','2026-09-19T01:00:00.000Z')`)
+    const record = sqlite.prepare('SELECT * FROM attendance_records WHERE id=?').get('active-break')
+    const binding = { prepare: (sql: string) => ({ bind: (...values: any[]) => ({ run: async () => ({ meta: { changes: sqlite.prepare(sql).run(...values).changes } }) }) }) }
+    const save = new Function('db', 'isoNow', 'createError', `${script}\nreturn saveAttendanceTimes`)(
+      () => binding, () => '2026-09-19T02:00:00.000Z', (options: any) => Object.assign(new Error(options.statusMessage), options))
+    await save({}, 'u2', record, record.clock_in_at, '2026-09-19T02:00:00.000Z')
+    const after = sqlite.prepare('SELECT * FROM attendance_records WHERE id=?').get('active-break') as any
+    assert.equal(after.break_started_at, null)
+    assert.equal(after.total_break_seconds, 3600)
+    assert.equal(after.original_total_break_seconds, 3600)
+  } finally { sqlite.close() }
+})

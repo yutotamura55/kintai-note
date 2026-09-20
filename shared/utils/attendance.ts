@@ -44,6 +44,10 @@ export function calculateBreakMinutes(record: AttendanceRecord, now: Date = new 
   if (record.break_minutes !== null && record.break_minutes !== undefined) {
     return Math.max(0, record.break_minutes)
   }
+  return calculatePunchBreakMinutes(record, now)
+}
+
+export function calculatePunchBreakMinutes(record: AttendanceRecord, now: Date = new Date()): number {
   let seconds = record.total_break_seconds || 0
   if (record.break_started_at) {
     const start = new Date(record.break_started_at).getTime()
@@ -56,6 +60,13 @@ export function calculateBreakMinutes(record: AttendanceRecord, now: Date = new 
 }
 
 export function calculateWorkMinutes(record: AttendanceRecord, now: Date = new Date()): number {
+  if (record.break_minutes !== null && record.break_minutes !== undefined) {
+    return Math.max(0, calculatePunchWorkMinutes(record, now) + calculatePunchBreakMinutes(record, now) - record.break_minutes)
+  }
+  return calculatePunchWorkMinutes(record, now)
+}
+
+export function calculatePunchWorkMinutes(record: AttendanceRecord, now: Date = new Date()): number {
   if (!record.clock_in_at) return 0
   const start = new Date(record.clock_in_at).getTime()
   const end = record.clock_out_at
@@ -63,14 +74,9 @@ export function calculateWorkMinutes(record: AttendanceRecord, now: Date = new D
     : (record.break_started_at ? new Date(record.break_started_at).getTime() : now.getTime())
   if (end <= start) return 0
   const grossMinutes = Math.floor((end - start) / (60 * 1000))
-  let breakMinutes: number
-  if (record.break_minutes !== null && record.break_minutes !== undefined) {
-    breakMinutes = record.break_minutes
-  } else if (record.break_started_at && !record.clock_out_at) {
-    breakMinutes = Math.floor((record.total_break_seconds || 0) / 60)
-  } else {
-    breakMinutes = calculateBreakMinutes(record, now)
-  }
+  const breakMinutes = record.break_started_at && !record.clock_out_at
+    ? Math.floor((record.total_break_seconds || 0) / 60)
+    : calculatePunchBreakMinutes(record, now)
   return Math.max(0, grossMinutes - breakMinutes)
 }
 

@@ -19,6 +19,9 @@ export default defineEventHandler(async (event) => {
   let clockInAt: string | null; let clockOutAt: string | null
   try { clockInAt = parse(body?.clockIn, record.clock_in_at); clockOutAt = parse(body?.clockOut, record.clock_out_at) }
   catch (cause) { throw createError({ statusCode: 400, statusMessage: cause instanceof Error ? cause.message : '正しい日時を入力してください。' }) }
+  if (record.break_started_at && clockOutAt && clockOutAt < record.break_started_at) {
+    throw createError({ statusCode: 400, statusMessage: '退勤時刻は休憩開始時刻より後にしてください。' })
+  }
 
   let breakMinutes: number | null | undefined = undefined
   if (body && 'breakMinutes' in body) {

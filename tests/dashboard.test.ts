@@ -5,7 +5,7 @@ import { createRequire, stripTypeScriptTypes } from 'node:module'
 import { ref, computed, proxyRefs, createSSRApp } from 'vue'
 import { renderToString } from '@vue/server-renderer'
 import { compile } from '@vue/compiler-ssr'
-import { displayJapanDateTime, calculateBreakMinutes, calculateWorkMinutes, formatDurationHuman } from '../shared/utils/attendance.ts'
+import { displayJapanDateTime, calculatePunchBreakMinutes, calculatePunchWorkMinutes, formatDurationHuman } from '../shared/utils/attendance.ts'
 
 // Run the actual page script and template; replace only Nuxt/network/lifecycle boundaries.
 const source = readFileSync(new URL('../app/pages/dashboard.vue', import.meta.url), 'utf8')
@@ -14,8 +14,8 @@ const render = new Function('require', compile(source.match(/<template>([\s\S]*)
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor
 async function page(api: Function, post: Function = async () => ({}), redirect: Function = async () => {}) {
   const dependencies = { ref, computed, useRouter: () => ({ replace: redirect }), useRequestFetch: () => api,
-    $fetch: post, displayJapanDateTime, calculateBreakMinutes, calculateWorkMinutes, formatDurationHuman, onMounted: () => {}, onUnmounted: () => {} }
-  const state = await new AsyncFunction(...Object.keys(dependencies), `${script}\nreturn { me, today, error, busy, displayedRecord, previousOpen, correctionLink, load, clock, logout, displayJapanDateTime, formatDurationHuman, isOnBreak, breakMinutes, workMinutes, statusInfo, ...(typeof loadError !== 'undefined' ? {loadError} : {}), ...(typeof loading !== 'undefined' ? {loading} : {}) }`)(...Object.values(dependencies))
+    $fetch: post, displayJapanDateTime, calculatePunchBreakMinutes, calculatePunchWorkMinutes, formatDurationHuman, onMounted: () => {}, onUnmounted: () => {} }
+  const state = await new AsyncFunction(...Object.keys(dependencies), `${script}\nreturn { me, today, error, busy, displayedRecord, punchRecord, previousOpen, correctionLink, load, clock, logout, displayJapanDateTime, formatDurationHuman, isOnBreak, breakMinutes, workMinutes, statusInfo, ...(typeof loadError !== 'undefined' ? {loadError} : {}), ...(typeof loading !== 'undefined' ? {loading} : {}) }`)(...Object.values(dependencies))
   return { state: proxyRefs(state), html: () => {
     const app = createSSRApp({ setup: () => state, ssrRender: render })
     app.component('NuxtLink', { template: '<a><slot /></a>' })
@@ -93,4 +93,35 @@ test('break button toggles and clock-out is disabled when on break', async () =>
   assert.match(html, /休憩中/)
   assert.match(html, /休憩終了を記録/)
   assert.match(html, /<button[^>]*disabled[^>]*>退勤を記録/)
+})
+
+test('dashboard duration ignores the manual break override', async () => {
+  const today = {
+    date: '2026-09-18',
+    record: { id: 'shift-a', work_date: '2026-09-18', clock_in_at: '2026-09-18T00:00:00.000Z', clock_out_at: '2026-09-18T09:00:00.000Z', total_break_seconds: 3600, break_minutes: 45 },
+    openRecord: null,
+  }
+  const view = await page(async (path: string) => path === '/api/auth/me' ? { display_name: 'Test', role: 'member' } : today)
+  const html = await view.html()
+  assert.match(html, /1時間0分/)
+  assert.match(html, /8時間0分/)
+})
+
+test('dashboard uses original punch times after a manual edit', async () => {
+  const today = {
+    date: '2026-09-18',
+    record: {
+      id: 'shift-a', work_date: '2026-09-18',
+      clock_in_at: '2026-09-18T00:00:00.000Z', clock_out_at: '2026-09-18T08:00:00.000Z',
+      original_clock_in_at: '2026-09-18T01:00:00.000Z', original_clock_out_at: '2026-09-18T09:00:00.000Z',
+      total_break_seconds: 0, original_total_break_seconds: 0,
+    },
+    openRecord: null,
+  }
+  const view = await page(async (path: string) => path === '/api/auth/me' ? { display_name: 'Test', role: 'member' } : today)
+  const html = await view.html()
+  assert.match(html, /2026-09-18 10:00/)
+  assert.match(html, /2026-09-18 18:00/)
+  assert.doesNotMatch(html, /2026-09-18 09:00/)
+  assert.doesNotMatch(html, /2026-09-18 17:00/)
 })

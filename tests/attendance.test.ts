@@ -1,7 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { workDateAt, japanDateTime, parseJapanDateTime, displayJapanDateTime,
-  calculateBreakMinutes, calculateWorkMinutes, formatDuration, formatDurationHuman } from '../shared/utils/attendance.ts'
+  calculateBreakMinutes, calculateWorkMinutes, calculatePunchBreakMinutes, calculatePunchWorkMinutes,
+  formatDuration, formatDurationHuman } from '../shared/utils/attendance.ts'
 
 for (const [instant, expected] of [
   ['2026-09-17T00:00:00+09:00', '2026-09-16'],
@@ -86,6 +87,17 @@ test('calculate break and work duration with various break states', () => {
   }
   assert.equal(calculateBreakMinutes(overnight), 60)
   assert.equal(calculateWorkMinutes(overnight), 480)
+})
+
+test('punch duration calculations ignore manual break overrides', () => {
+  const record = {
+    id: 'override', work_date: '2026-09-17',
+    clock_in_at: '2026-09-17T00:00:00.000Z', clock_out_at: '2026-09-17T09:00:00.000Z',
+    total_break_seconds: 3600, break_minutes: 45,
+    original_clock_in_at: null, original_clock_out_at: null,
+  }
+  assert.equal(calculatePunchBreakMinutes(record), 60)
+  assert.equal(calculatePunchWorkMinutes(record), 480)
 })
 
 test('formatDuration formats minutes cleanly', () => {
