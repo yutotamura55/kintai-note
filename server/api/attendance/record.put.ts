@@ -1,5 +1,5 @@
 import { currentUser } from '~~/server/utils/auth'
-import { ownedAttendance, saveAttendanceTimes } from '~~/server/utils/attendance'
+import { ownedAttendance, resolveBreakMinutes, saveAttendanceTimes } from '~~/server/utils/attendance'
 import { japanDateTime, parseJapanDateTime } from '~~/shared/utils/attendance'
 
 export default defineEventHandler(async (event) => {
@@ -32,12 +32,7 @@ export default defineEventHandler(async (event) => {
       if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < 0) {
         throw createError({ statusCode: 400, statusMessage: '休憩時間は0分以上の整数で入力してください。' })
       }
-      // Preserve punch accumulation mode if unchanged from original punches
-      if (record.break_minutes === null && parsed === Math.floor((record.total_break_seconds || 0) / 60)) {
-        breakMinutes = null
-      } else {
-        breakMinutes = parsed
-      }
+      breakMinutes = resolveBreakMinutes(record, parsed, clockOutAt)
     }
   }
 

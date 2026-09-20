@@ -41,6 +41,23 @@ test('a stale edit or restoration cannot overwrite a concurrent clock-out', asyn
   } finally { sqlite.close() }
 })
 
+test('unchanged active punch break remains in accumulation mode when edited', async () => {
+  const sqlite = new DatabaseSync(':memory:')
+  try {
+    sqlite.exec(readFileSync(new URL('../db/schema.sql', import.meta.url), 'utf8'))
+    for (const file of readdirSync(new URL('../migrations/', import.meta.url)).filter(name => name.endsWith('.sql')).sort()) {
+      sqlite.exec(readFileSync(new URL(`../migrations/${file}`, import.meta.url), 'utf8'))
+    }
+    const record = {
+      break_minutes: null,
+      total_break_seconds: 0,
+      break_started_at: '2026-09-19T01:00:00.000Z',
+    }
+    const resolve = new Function(`${script}\nreturn resolveBreakMinutes`)()
+    assert.equal(resolve(record, 60, '2026-09-19T02:00:00.000Z', new Date('2026-09-19T02:00:00.000Z')), null)
+  } finally { sqlite.close() }
+})
+
 test('manual clock-out finalizes an active punch break', async () => {
   const sqlite = new DatabaseSync(':memory:')
   try {

@@ -16,6 +16,21 @@ export async function ownedAttendance(event: H3Event, userId: string, recordId: 
   return record
 }
 
+export function resolveBreakMinutes(
+  record: AttendanceRecord,
+  requested: number,
+  clockOutAt: string | null,
+  now: Date = new Date(),
+): number | null {
+  if (!record.break_started_at) {
+    return record.break_minutes === null && requested === Math.floor((record.total_break_seconds || 0) / 60) ? null : requested
+  }
+  const start = new Date(record.break_started_at).getTime()
+  const end = clockOutAt ? new Date(clockOutAt).getTime() : now.getTime()
+  const punchMinutes = Math.max(0, Math.floor(((record.total_break_seconds || 0) * 1000 + Math.max(0, end - start)) / 60000))
+  return record.break_minutes === null && requested === punchMinutes ? null : requested
+}
+
 // Both manual edits and restoration use the same validation and guarded write.
 export async function saveAttendanceTimes(
   event: H3Event,
