@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { stripTypeScriptTypes } from 'node:module'
 import { DatabaseSync } from 'node:sqlite'
 
@@ -12,6 +12,9 @@ test('a stale edit or restoration cannot overwrite a concurrent clock-out', asyn
   const sqlite = new DatabaseSync(':memory:')
   try {
     sqlite.exec(readFileSync(new URL('../db/schema.sql', import.meta.url), 'utf8'))
+    for (const file of readdirSync(new URL('../migrations/', import.meta.url)).filter(name => name.endsWith('.sql')).sort()) {
+      sqlite.exec(readFileSync(new URL(`../migrations/${file}`, import.meta.url), 'utf8'))
+    }
     sqlite.exec(`INSERT INTO users (id,employee_code,display_name) VALUES ('u','u','U');
       INSERT INTO attendance_records (id,user_id,work_date,clock_in_at)
       VALUES ('a','u','2026-09-19','2026-09-19T00:00:00.000Z')`)
@@ -28,5 +31,12 @@ test('a stale edit or restoration cannot overwrite a concurrent clock-out', asyn
     // A fresh snapshot can be saved, proving the adapter actually executes writes.
     await save({}, 'u', after, '2026-09-19T00:01:00.000Z', after.clock_out_at)
     assert.equal(sqlite.prepare('SELECT clock_in_at FROM attendance_records WHERE id=?').get('a')!.clock_in_at, '2026-09-19T00:01:00.000Z')
+
+    // Validates breakMinutes
+    const latest = sqlite.prepare('SELECT * FROM attendance_records WHERE id=?').get('a')!
+    await assert.rejects(save({}, 'u', latest, '2026-09-19T00:00:00.000Z', '2026-09-19T01:00:00.000Z', -1), { statusCode: 400 })
+    await assert.rejects(save({}, 'u', latest, '2026-09-19T00:00:00.000Z', '2026-09-19T01:00:00.000Z', 70), { statusCode: 400 })
+    await save({}, 'u', latest, '2026-09-19T00:00:00.000Z', '2026-09-19T01:00:00.000Z', 30)
+    assert.equal(sqlite.prepare('SELECT break_minutes FROM attendance_records WHERE id=?').get('a')!.break_minutes, 30)
   } finally { sqlite.close() }
 })

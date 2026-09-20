@@ -4,7 +4,7 @@ import { japanDateTime, parseJapanDateTime } from '~~/shared/utils/attendance'
 
 export default defineEventHandler(async (event) => {
   const user = await currentUser(event)
-  const body = await readBody<{ id?: string, clockIn?: string | null, clockOut?: string | null }>(event)
+  const body = await readBody<{ id?: string, clockIn?: string | null, clockOut?: string | null, breakMinutes?: number | string | null }>(event)
   const record = await ownedAttendance(event, user.id, body?.id)
 
   // Retain support for old, already-open clients sending HH:MM. Never infer "next day".
@@ -17,8 +17,22 @@ export default defineEventHandler(async (event) => {
     return previous && parsed && japanDateTime(previous) === japanDateTime(parsed) ? previous : parsed
   }
   let clockInAt: string | null; let clockOutAt: string | null
-  try { clockInAt = parse(body.clockIn, record.clock_in_at); clockOutAt = parse(body.clockOut, record.clock_out_at) }
+  try { clockInAt = parse(body?.clockIn, record.clock_in_at); clockOutAt = parse(body?.clockOut, record.clock_out_at) }
   catch (cause) { throw createError({ statusCode: 400, statusMessage: cause instanceof Error ? cause.message : '正しい日時を入力してください。' }) }
-  await saveAttendanceTimes(event, user.id, record, clockInAt, clockOutAt)
+
+  let breakMinutes: number | null | undefined = undefined
+  if (body && 'breakMinutes' in body) {
+    if (body.breakMinutes === null || body.breakMinutes === '' || body.breakMinutes === undefined) {
+      breakMinutes = null
+    } else {
+      const parsed = Number(body.breakMinutes)
+      if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < 0) {
+        throw createError({ statusCode: 400, statusMessage: '休憩時間は0分以上の整数で入力してください。' })
+      }
+      breakMinutes = parsed
+    }
+  }
+
+  await saveAttendanceTimes(event, user.id, record, clockInAt, clockOutAt, breakMinutes)
   return { ok: true }
 })

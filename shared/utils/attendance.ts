@@ -7,6 +7,10 @@ export interface AttendanceRecord {
   clock_out_at: string | null
   original_clock_in_at: string | null
   original_clock_out_at: string | null
+  break_started_at?: string | null
+  total_break_seconds?: number
+  original_total_break_seconds?: number
+  break_minutes?: number | null
 }
 
 // Japan has no daylight saving time. Shift JST back four hours before taking the date.
@@ -34,4 +38,52 @@ export function parseJapanDateTime(value: unknown): string | null {
     throw new Error('正しい日時を入力してください。')
   }
   return timestamp.toISOString()
+}
+
+export function calculateBreakMinutes(record: AttendanceRecord, now: Date = new Date()): number {
+  if (record.break_minutes !== null && record.break_minutes !== undefined) {
+    return Math.max(0, record.break_minutes)
+  }
+  let seconds = record.total_break_seconds || 0
+  if (record.break_started_at) {
+    const start = new Date(record.break_started_at).getTime()
+    const end = record.clock_out_at ? new Date(record.clock_out_at).getTime() : now.getTime()
+    if (end > start) {
+      seconds += Math.floor((end - start) / 1000)
+    }
+  }
+  return Math.max(0, Math.floor(seconds / 60))
+}
+
+export function calculateWorkMinutes(record: AttendanceRecord, now: Date = new Date()): number {
+  if (!record.clock_in_at) return 0
+  const start = new Date(record.clock_in_at).getTime()
+  const end = record.clock_out_at
+    ? new Date(record.clock_out_at).getTime()
+    : (record.break_started_at ? new Date(record.break_started_at).getTime() : now.getTime())
+  if (end <= start) return 0
+  const grossMinutes = Math.floor((end - start) / (60 * 1000))
+  let breakMinutes: number
+  if (record.break_minutes !== null && record.break_minutes !== undefined) {
+    breakMinutes = record.break_minutes
+  } else if (record.break_started_at && !record.clock_out_at) {
+    breakMinutes = Math.floor((record.total_break_seconds || 0) / 60)
+  } else {
+    breakMinutes = calculateBreakMinutes(record, now)
+  }
+  return Math.max(0, grossMinutes - breakMinutes)
+}
+
+export function formatDuration(minutes: number | null | undefined): string {
+  if (minutes === null || minutes === undefined) return '—'
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  return `${h}:${String(m).padStart(2, '0')}`
+}
+
+export function formatDurationHuman(minutes: number | null | undefined): string {
+  if (minutes === null || minutes === undefined) return '—'
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  return `${h}時間${m}分`
 }
