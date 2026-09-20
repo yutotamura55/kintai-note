@@ -5,17 +5,23 @@ import { createRequire, stripTypeScriptTypes } from 'node:module'
 import { ref, computed, proxyRefs, createSSRApp } from 'vue'
 import { renderToString } from '@vue/server-renderer'
 import { compile } from '@vue/compiler-ssr'
-import { displayJapanDateTime, calculatePunchBreakMinutes, calculatePunchWorkMinutes, formatDurationHuman } from '../shared/utils/attendance.ts'
+import { displayJapanDateTime } from '../shared/utils/attendance.ts'
 
 // Run the actual page script and template; replace only Nuxt/network/lifecycle boundaries.
 const source = readFileSync(new URL('../app/pages/dashboard.vue', import.meta.url), 'utf8')
 const script = stripTypeScriptTypes(source.match(/<script setup lang="ts">([\s\S]*?)<\/script>/)![1].replace(/^import .*\n/gm, ''))
 const render = new Function('require', compile(source.match(/<template>([\s\S]*)<\/template>/)![1], { mode: 'function' }).code)(createRequire(import.meta.url))
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor
-async function page(api: Function, post: Function = async () => ({}), redirect: Function = async () => {}) {
+async function page(api: Function, post: Function = async () => ({}), redirect: Function = async () => {}, lifecycle: Record<string, any> = {}) {
+  const document = { visibilityState: 'visible', addEventListener: (event: string, callback: Function) => { lifecycle[`document:${event}`] = callback }, removeEventListener: () => {} }
+  lifecycle.document = document
   const dependencies = { ref, computed, useRouter: () => ({ replace: redirect }), useRequestFetch: () => api,
-    $fetch: post, displayJapanDateTime, calculatePunchBreakMinutes, calculatePunchWorkMinutes, formatDurationHuman, onMounted: () => {}, onUnmounted: () => {} }
-  const state = await new AsyncFunction(...Object.keys(dependencies), `${script}\nreturn { me, today, error, busy, displayedRecord, punchRecord, previousOpen, correctionLink, load, clock, logout, displayJapanDateTime, formatDurationHuman, isOnBreak, breakMinutes, workMinutes, statusInfo, ...(typeof loadError !== 'undefined' ? {loadError} : {}), ...(typeof loading !== 'undefined' ? {loading} : {}) }`)(...Object.values(dependencies))
+    $fetch: post, displayJapanDateTime,
+    onMounted: (callback: Function) => { lifecycle.mounted = callback }, onUnmounted: (callback: Function) => { lifecycle.unmounted = callback },
+    setInterval: () => { lifecycle.intervalCalls = (lifecycle.intervalCalls || 0) + 1; return 1 }, clearInterval: () => {},
+    window: { addEventListener: (event: string, callback: Function) => { lifecycle[`window:${event}`] = callback }, removeEventListener: () => {} },
+    document }
+  const state = await new AsyncFunction(...Object.keys(dependencies), `${script}\nreturn { me, today, error, busy, displayedRecord, punchRecord, previousOpen, correctionLink, load, clock, logout, displayJapanDateTime, isOnBreak, statusInfo, ...(typeof loadError !== 'undefined' ? {loadError} : {}), ...(typeof loading !== 'undefined' ? {loading} : {}) }`)(...Object.values(dependencies))
   return { state: proxyRefs(state), html: () => {
     const app = createSSRApp({ setup: () => state, ssrRender: render })
     app.component('NuxtLink', { template: '<a><slot /></a>' })
@@ -70,6 +76,38 @@ test('clock buttons are disabled while a refresh is in flight', async () => {
   } finally { release(); await refresh }
 })
 
+test('dashboard has no idle timer or duration display', async () => {
+  const lifecycle: Record<string, any> = {}
+  const view = await page(success, undefined, undefined, lifecycle)
+  lifecycle.mounted()
+  assert.equal(lifecycle.intervalCalls || 0, 0)
+  const html = await view.html()
+  assert.doesNotMatch(html, /休憩時間/)
+  assert.doesNotMatch(html, /実労働時間/)
+})
+
+test('returning to a visible or focused dashboard synchronizes with the server', async () => {
+  const lifecycle: Record<string, any> = {}
+  let attendanceRequests = 0
+  const view = await page(async (path: string) => {
+    if (path === '/api/auth/me') return { display_name: 'Test', role: 'member' }
+    attendanceRequests++
+    return today
+  }, undefined, undefined, lifecycle)
+  lifecycle.mounted()
+  lifecycle.document.visibilityState = 'hidden'
+  lifecycle['document:visibilitychange']()
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(attendanceRequests, 1)
+  lifecycle.document.visibilityState = 'visible'
+  lifecycle['document:visibilitychange']()
+  await new Promise(resolve => setImmediate(resolve))
+  lifecycle['window:focus']()
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(attendanceRequests, 3)
+  assert.ok(view.state.today)
+})
+
 test('break button toggles and clock-out is disabled when on break', async () => {
   // Working state: break_start available, clock-out available
   const view = await page(success)
@@ -93,18 +131,6 @@ test('break button toggles and clock-out is disabled when on break', async () =>
   assert.match(html, /休憩中/)
   assert.match(html, /休憩終了を記録/)
   assert.match(html, /<button[^>]*disabled[^>]*>退勤を記録/)
-})
-
-test('dashboard duration ignores the manual break override', async () => {
-  const today = {
-    date: '2026-09-18',
-    record: { id: 'shift-a', work_date: '2026-09-18', clock_in_at: '2026-09-18T00:00:00.000Z', clock_out_at: '2026-09-18T09:00:00.000Z', total_break_seconds: 3600, break_minutes: 45 },
-    openRecord: null,
-  }
-  const view = await page(async (path: string) => path === '/api/auth/me' ? { display_name: 'Test', role: 'member' } : today)
-  const html = await view.html()
-  assert.match(html, /1時間0分/)
-  assert.match(html, /8時間0分/)
 })
 
 test('dashboard uses original punch times after a manual edit', async () => {

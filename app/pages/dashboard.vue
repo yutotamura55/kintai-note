@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { displayJapanDateTime, calculatePunchBreakMinutes, calculatePunchWorkMinutes, formatDurationHuman } from '~~/shared/utils/attendance'
+import { displayJapanDateTime } from '~~/shared/utils/attendance'
 const router = useRouter(); const today = ref<any>(); const me = ref<any>(); const error = ref(''); const busy = ref(false)
 const loadError = ref(''); const loading = ref(false)
 const api = useRequestFetch()
@@ -11,8 +11,6 @@ const punchRecord = computed(() => {
     ...record,
     clock_in_at: record.original_clock_in_at ?? record.clock_in_at,
     clock_out_at: record.original_clock_out_at ?? record.clock_out_at,
-    total_break_seconds: record.original_total_break_seconds ?? record.total_break_seconds,
-    break_minutes: null,
   }
 })
 const previousOpen = computed(() => today.value?.openRecord && today.value.openRecord.work_date !== today.value.date)
@@ -20,8 +18,6 @@ const correctionLink = computed(() => ({ path: '/records', query: {
   month: today.value?.openRecord?.work_date.slice(0, 7), edit: today.value?.openRecord?.id,
 } }))
 const isOnBreak = computed(() => !!punchRecord.value?.break_started_at && !punchRecord.value?.clock_out_at)
-const breakMinutes = computed(() => punchRecord.value ? calculatePunchBreakMinutes(punchRecord.value) : 0)
-const workMinutes = computed(() => punchRecord.value ? calculatePunchWorkMinutes(punchRecord.value) : 0)
 const statusInfo = computed(() => {
   if (!punchRecord.value?.clock_in_at) return { label: '未出勤', class: 'status-default' }
   if (punchRecord.value?.clock_out_at) return { label: '退勤済み', class: 'status-done' }
@@ -57,10 +53,15 @@ async function clock(action: 'in' | 'out' | 'break_start' | 'break_end') {
 }
 async function logout() { await $fetch('/api/auth/logout', { method: 'POST' }); await router.replace('/login') }
 await load()
-let refreshTimer: ReturnType<typeof setInterval> | undefined
-function refresh() { if (!busy.value && document.visibilityState === 'visible') void load() }
-onMounted(() => { refreshTimer = setInterval(refresh, 30_000); window.addEventListener('focus', refresh); document.addEventListener('visibilitychange', refresh) })
-onUnmounted(() => { clearInterval(refreshTimer); window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', refresh) })
+function refreshAfterReturn() { if (!busy.value && document.visibilityState === 'visible') void load() }
+onMounted(() => {
+  window.addEventListener('focus', refreshAfterReturn)
+  document.addEventListener('visibilitychange', refreshAfterReturn)
+})
+onUnmounted(() => {
+  window.removeEventListener('focus', refreshAfterReturn)
+  document.removeEventListener('visibilitychange', refreshAfterReturn)
+})
 </script>
 <template>
   <main class="app-shell">
@@ -86,8 +87,6 @@ onUnmounted(() => { clearInterval(refreshTimer); window.removeEventListener('foc
       <div class="times">
         <div><span>出勤（日本時間）</span><strong>{{ displayJapanDateTime(punchRecord?.clock_in_at) }}</strong></div>
         <div><span>退勤（日本時間）</span><strong>{{ displayJapanDateTime(punchRecord?.clock_out_at) }}</strong></div>
-        <div><span>休憩時間</span><strong>{{ punchRecord?.clock_in_at ? formatDurationHuman(breakMinutes) : '—' }}</strong></div>
-        <div><span>実労働時間</span><strong>{{ punchRecord?.clock_in_at ? formatDurationHuman(workMinutes) : '—' }}</strong></div>
       </div>
       <div class="actions">
         <button class="primary" :disabled="busy || loading || !!today.record?.clock_in_at" @click="clock('in')">出勤を記録</button>
@@ -108,7 +107,6 @@ onUnmounted(() => { clearInterval(refreshTimer); window.removeEventListener('foc
 .status-working { background: #e6f7ec; color: #167a3a; }
 .status-break { background: #fff4e5; color: #b45309; }
 .status-done { background: #e9efff; color: #315dc5; }
-.times { grid-template-columns: 1fr 1fr; }
 @media (max-width: 520px) {
   .clock-status-bar { flex-direction: column; gap: 6px; }
 }
