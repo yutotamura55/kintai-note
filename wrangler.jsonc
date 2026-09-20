@@ -9,7 +9,7 @@
     "logs": { "enabled": true, "head_sampling_rate": 1 },
     "traces": { "enabled": true, "head_sampling_rate": 0.01 }
   },
-  "assets": { "directory": ".output/public" },
+  "assets": { "directory": ".output/public", "binding": "ASSETS" },
   "d1_databases": [
     { "binding": "DB", "database_name": "kintai-note", "database_id": "fafe0636-627d-415c-9007-01d110ff253c" }
   ]
