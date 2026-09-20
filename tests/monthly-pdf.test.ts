@@ -5,20 +5,21 @@ import { stripTypeScriptTypes } from 'node:module'
 import * as pdfLib from 'pdf-lib'
 import fontkit from '@pdf-lib/fontkit'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
-import { japanDateTime } from '../shared/utils/attendance.ts'
+import { japanDateTime, calculateBreakMinutes, calculateWorkMinutes, formatDuration } from '../shared/utils/attendance.ts'
 
 // Run the actual route and PDF libraries, adapting only Nuxt, auth, DB and asset I/O.
 const source = readFileSync(new URL('../server/api/reports/month.pdf.get.ts', import.meta.url), 'utf8')
 const script = stripTypeScriptTypes(source.replace(/^import .*\n/gm, '')).replace('export default ', 'return ')
 const fontBytes = readFileSync(new URL('../app/public/fonts/NotoSansJP-Regular.ttf', import.meta.url))
-const rows = [{ work_date: '2026-09-16', clock_in_at: '2026-09-16T16:00:00.000Z', clock_out_at: '2026-09-16T20:00:00.000Z' }]
+const rows = [{ work_date: '2026-09-16', clock_in_at: '2026-09-16T16:00:00.000Z', clock_out_at: '2026-09-16T20:00:00.000Z', total_break_seconds: 3600, break_minutes: null }]
 async function report(displayName: string, records = rows, options = { cloudflare: true, assetStatus: 200 }) {
   const headers: Record<string, string> = {}
   const asset = async (url: string) => {
     assert.equal(new URL(url, 'https://assets.local').pathname, '/fonts/NotoSansJP-Regular.ttf')
     return new Response(fontBytes, { status: options.assetStatus })
   }
-  const dependencies = { PDFDocument: pdfLib.PDFDocument, StandardFonts: pdfLib.StandardFonts, rgb: pdfLib.rgb, fontkit, japanDateTime,
+  const dependencies = { PDFDocument: pdfLib.PDFDocument, StandardFonts: pdfLib.StandardFonts, rgb: pdfLib.rgb, fontkit,
+    japanDateTime, calculateBreakMinutes, calculateWorkMinutes, formatDuration,
     defineEventHandler: (handler: Function) => handler,
     currentUser: async () => ({ id: 'user', display_name: displayName }),
     getQuery: () => ({ month: '2026-09' }),
@@ -45,6 +46,10 @@ for (const name of ['Local Test User', '山田 太郎', '髙橋 﨑子 𠮷田',
     assert.ok(result.text.includes('2026-09-16'))
     assert.ok(result.text.includes('2026-09-17 01:00'))
     assert.ok(result.text.includes('2026-09-17 05:00'))
+    assert.ok(result.text.includes('Break'))
+    assert.ok(result.text.includes('Actual work'))
+    assert.ok(result.text.includes('1:00'))
+    assert.ok(result.text.includes('3:00'))
     assert.equal(result.pages, 1)
     assert.equal(result.headers['Content-Type'], 'application/pdf')
     assert.equal(result.headers['Content-Disposition'], 'attachment; filename="kintai-2026-09.pdf"')

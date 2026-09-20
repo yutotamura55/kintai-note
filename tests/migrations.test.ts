@@ -20,10 +20,16 @@ for (const legacy of [false, true]) {
       }
       const columns = db.prepare('PRAGMA table_info(attendance_records)').all().map(row => row.name)
       assert.ok(columns.includes('original_clock_in_at') && columns.includes('original_clock_out_at'))
+      assert.ok(columns.includes('break_started_at') && columns.includes('total_break_seconds')
+        && columns.includes('original_total_break_seconds') && columns.includes('break_minutes'))
       if (legacy) {
         const row = db.prepare('SELECT * FROM attendance_records WHERE id=?').get('a')!
         assert.equal(row.original_clock_in_at, null)
         assert.equal(row.original_clock_out_at, null)
+        assert.equal(row.break_started_at, null)
+        assert.equal(row.total_break_seconds, 0)
+        assert.equal(row.original_total_break_seconds, 0)
+        assert.equal(row.break_minutes, null)
         assert.equal(row.clock_in_at, '2026-09-19T00:00:12.345Z')
         assert.equal(row.clock_out_at, '2026-09-19T09:00:45.678Z')
         assert.equal(row.work_date, '2026-09-19')

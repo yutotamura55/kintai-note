@@ -16,7 +16,7 @@ const record = { id: 'shift', work_date: '2026-09-19', clock_in_at: '2026-09-19T
 async function page(rows: AttendanceRecord[] = [record], post: Function = async () => ({})) {
   const dependencies = { ref, ...attendance, useRoute: () => ({ query: { month: '2026-09' } }),
     useRequestFetch: () => async () => ({ results: rows }), $fetch: post, watch: () => {} }
-  const state = await new AsyncFunction(...Object.keys(dependencies), `${script}\nreturn { month, records, error, editing, draft, saving, edit, cancel, save, pdf, displayJapanDateTime, ...(typeof restore !== 'undefined' ? {restore} : {}), ...(typeof canRestore !== 'undefined' ? {canRestore} : {}) }`)(...Object.values(dependencies))
+  const state = await new AsyncFunction(...Object.keys(dependencies), `${script}\nreturn { month, records, error, editing, draft, saving, edit, cancel, save, pdf, displayJapanDateTime, calculateBreakMinutes, calculateWorkMinutes, formatDuration, restoreTargetLabel, ...(typeof restore !== 'undefined' ? {restore} : {}), ...(typeof canRestore !== 'undefined' ? {canRestore} : {}) }`)(...Object.values(dependencies))
   return { state: proxyRefs(state), html: () => {
     const app = createSSRApp({ setup: () => state, ssrRender: render })
     app.component('NuxtLink', { template: '<a><slot /></a>' })
@@ -67,4 +67,34 @@ test('restore disables mutations while saving', async () => {
 test('already restored records disable restoration even when originals are present', async () => {
   const view = await page([{ ...record, clock_in_at: record.original_clock_in_at }])
   assert.match(await view.html(), /<button[^>]*disabled[^>]*>元の打刻時刻に戻す/)
+})
+
+test('records display break and actual work times and allow editing break minutes', async () => {
+  const testRecord = {
+    ...record,
+    total_break_seconds: 3600,
+    original_total_break_seconds: 3600,
+    break_minutes: null,
+  }
+  let savedBody: any
+  const view = await page([testRecord], async (url: string, options: any) => {
+    savedBody = options.body
+  })
+  const html = await view.html()
+  // 1:00 break, 7:00 work time (01:00 to 09:00 gross = 8h, minus 1h = 7h)
+  assert.match(html, /1:00/)
+  assert.match(html, /7:00/)
+
+  // Edit draft
+  view.state.edit(testRecord)
+  assert.equal(view.state.draft.breakMinutes, 60)
+  view.state.draft.breakMinutes = 45
+  await view.state.save(testRecord)
+  assert.equal(savedBody.breakMinutes, 45)
+
+  // Modified breakMinutes allows restore
+  const modifiedRecord = { ...testRecord, break_minutes: 45 }
+  const modifiedView = await page([modifiedRecord])
+  const modifiedHtml = await modifiedView.html()
+  assert.match(modifiedHtml, /復元対象：.*休憩/)
 })
