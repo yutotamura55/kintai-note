@@ -16,16 +16,57 @@ export async function ownedAttendance(event: H3Event, userId: string, recordId: 
   return record
 }
 
+export function resolveBreakMinutes(
+  record: AttendanceRecord,
+  requested: number,
+  clockOutAt: string | null,
+  now: Date = new Date(),
+): number | null {
+  if (!record.break_started_at) {
+    return record.break_minutes === null && requested === Math.floor((record.total_break_seconds || 0) / 60) ? null : requested
+  }
+  const start = new Date(record.break_started_at).getTime()
+  const end = clockOutAt ? new Date(clockOutAt).getTime() : now.getTime()
+  const punchMinutes = Math.max(0, Math.floor(((record.total_break_seconds || 0) * 1000 + Math.max(0, end - start)) / 60000))
+  return record.break_minutes === null && requested === punchMinutes ? null : requested
+}
+
 // Both manual edits and restoration use the same validation and guarded write.
-// Future break intervals must be validated here against these effective times.
-export async function saveAttendanceTimes(event: H3Event, userId: string, record: AttendanceRecord, clockInAt: string | null, clockOutAt: string | null) {
+export async function saveAttendanceTimes(
+  event: H3Event,
+  userId: string,
+  record: AttendanceRecord,
+  clockInAt: string | null,
+  clockOutAt: string | null,
+  breakMinutes?: number | null,
+) {
   if (!clockInAt) throw createError({ statusCode: 400, statusMessage: '出勤時刻を入力してください。' })
   if (clockOutAt && clockOutAt <= clockInAt) throw createError({ statusCode: 400, statusMessage: '退勤時刻は出勤時刻より後にしてください。' })
 
-  const result = await db(event).prepare(`UPDATE attendance_records SET clock_in_at=?1, clock_out_at=?2, updated_at=?3
-    WHERE id=?4 AND user_id=?5 AND clock_in_at IS ?6 AND clock_out_at IS ?7
+  const effectiveBreakMinutes = breakMinutes === undefined ? (record.break_minutes ?? null) : breakMinutes
+  if (effectiveBreakMinutes !== null) {
+    if (!Number.isInteger(effectiveBreakMinutes) || effectiveBreakMinutes < 0) {
+      throw createError({ statusCode: 400, statusMessage: '休憩時間は0分以上の整数で入力してください。' })
+    }
+    if (clockInAt && clockOutAt) {
+      const grossMinutes = Math.floor((new Date(clockOutAt).getTime() - new Date(clockInAt).getTime()) / (60 * 1000))
+      if (effectiveBreakMinutes > grossMinutes) {
+        throw createError({ statusCode: 400, statusMessage: '休憩時間は出勤から退勤までの総時間以内で入力してください。' })
+      }
+    }
+  }
+
+  const result = await db(event).prepare(`UPDATE attendance_records SET
+      clock_in_at=?1,
+      clock_out_at=?2,
+      break_minutes=?3,
+      total_break_seconds = total_break_seconds + CASE WHEN ?2 IS NOT NULL AND break_started_at IS NOT NULL THEN max(0, strftime('%s', ?2) - strftime('%s', break_started_at)) ELSE 0 END,
+      original_total_break_seconds = original_total_break_seconds + CASE WHEN ?2 IS NOT NULL AND break_started_at IS NOT NULL THEN max(0, strftime('%s', ?2) - strftime('%s', break_started_at)) ELSE 0 END,
+      break_started_at = CASE WHEN ?2 IS NOT NULL THEN NULL ELSE break_started_at END,
+      updated_at=?4
+    WHERE id=?5 AND user_id=?6 AND clock_in_at IS ?7 AND clock_out_at IS ?8
     AND (?2 IS NOT NULL OR NOT EXISTS (
-      SELECT 1 FROM attendance_records WHERE user_id=?5 AND id<>?4 AND clock_in_at IS NOT NULL AND clock_out_at IS NULL
-    ))`).bind(clockInAt, clockOutAt, isoNow(), record.id, userId, record.clock_in_at, record.clock_out_at).run()
+      SELECT 1 FROM attendance_records WHERE user_id=?6 AND id<>?5 AND clock_in_at IS NOT NULL AND clock_out_at IS NULL
+    ))`).bind(clockInAt, clockOutAt, effectiveBreakMinutes, isoNow(), record.id, userId, record.clock_in_at, record.clock_out_at).run()
   if (!result.meta.changes) throw createError({ statusCode: 409, statusMessage: '記録が更新されたか、ほかに未退勤の勤務があります。画面を再読み込みして確認してください。' })
 }
