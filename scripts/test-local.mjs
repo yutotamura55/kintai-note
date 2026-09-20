@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process'
 import { once } from 'node:events'
 import { testOriginalTimes } from './test-original-times.mjs'
+import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 
 const cwd = process.cwd()
 const wrangler = new URL('../node_modules/wrangler/bin/wrangler.js', import.meta.url).pathname
@@ -104,9 +105,21 @@ try {
   }
   const notOwned = await request('/api/attendance/record', { method: 'PUT', body: JSON.stringify({ id: 'not-owned', clockIn: '2026-09-17T01:00' }) })
   assert(notOwned.status === 404, 'Editing a record not owned by the user must fail.')
+  // Reproduce #7 with a Japanese display name (the old Helvetica font throws).
+  await run(process.execPath, [wrangler, 'd1', 'execute', 'kintai-note', '--local', '--command',
+    "UPDATE users SET display_name='山田 太郎' WHERE id='local-test-attendance-user'"])
   const pdf = await request('/api/reports/month.pdf?month=2026-09')
   assert(pdf.status === 200 && pdf.headers.get('content-type')?.includes('application/pdf'), 'Monthly PDF failed.')
-  assert((await pdf.text()).startsWith('%PDF-'), 'PDF response is not a PDF.')
+  const pdfBytes = new Uint8Array(await pdf.arrayBuffer())
+  assert(new TextDecoder().decode(pdfBytes.slice(0, 5)) === '%PDF-', 'PDF response is not a PDF.')
+  const pdfTask = getDocument({ data: pdfBytes, useSystemFonts: true, isEvalSupported: false })
+  try {
+    const document = await pdfTask.promise
+    const page = await document.getPage(1)
+    const text = (await page.getTextContent()).items.map(item => item.str || '').join(' ')
+    assert(text.includes('山田 太郎'), 'Downloaded PDF lost the Japanese display name.')
+    assert(text.includes('2026-09-17 01:00') && text.includes('2026-09-17 05:00'), 'Downloaded PDF lost Japan calendar dates.')
+  } finally { await pdfTask.destroy() }
 
   // Seed a pre-change unfinished shift; only the deterministic test fixture is modified.
   await run(process.execPath, [wrangler, 'd1', 'execute', 'kintai-note', '--local', '--command',
