@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { displayJapanDateTime } from '~~/shared/utils/attendance'
+import { displayJapanDateTime, attendanceState, canPerform } from '~~/shared/utils/attendance'
 const router = useRouter(); const today = ref<any>(); const me = ref<any>(); const error = ref(''); const busy = ref(false)
 const loadError = ref(''); const loading = ref(false)
 const api = useRequestFetch()
@@ -17,11 +17,12 @@ const previousOpen = computed(() => today.value?.openRecord && today.value.openR
 const correctionLink = computed(() => ({ path: '/records', query: {
   month: today.value?.openRecord?.work_date.slice(0, 7), edit: today.value?.openRecord?.id,
 } }))
-const isOnBreak = computed(() => !!punchRecord.value?.break_started_at && !punchRecord.value?.clock_out_at)
+const currentState = computed(() => attendanceState(punchRecord.value))
+const isOnBreak = computed(() => currentState.value === 'on_break')
 const statusInfo = computed(() => {
-  if (!punchRecord.value?.clock_in_at) return { label: '未出勤', class: 'status-default' }
-  if (punchRecord.value?.clock_out_at) return { label: '退勤済み', class: 'status-done' }
-  if (isOnBreak.value) return { label: '休憩中', class: 'status-break' }
+  if (currentState.value === 'idle') return { label: '未出勤', class: 'status-default' }
+  if (currentState.value === 'done') return { label: '退勤済み', class: 'status-done' }
+  if (currentState.value === 'on_break') return { label: '休憩中', class: 'status-break' }
   return { label: '勤務中', class: 'status-working' }
 })
 async function load() {
@@ -88,10 +89,22 @@ onUnmounted(() => {
         <div><span>出勤（日本時間）</span><strong>{{ displayJapanDateTime(punchRecord?.clock_in_at) }}</strong></div>
         <div><span>退勤（日本時間）</span><strong>{{ displayJapanDateTime(punchRecord?.clock_out_at) }}</strong></div>
       </div>
-      <div class="actions">
-        <button class="primary" :disabled="busy || loading || !!today.record?.clock_in_at" @click="clock('in')">出勤を記録</button>
-        <button class="secondary" :disabled="busy || loading || !today.openRecord" @click="clock(isOnBreak ? 'break_end' : 'break_start')">{{ isOnBreak ? '休憩終了を記録' : '休憩開始を記録' }}</button>
-        <button class="secondary" :disabled="busy || loading || !today.openRecord || isOnBreak" @click="clock('out')">退勤を記録</button>
+      <div class="action-panel" aria-live="polite">
+        <div class="action-panel-header">
+          <p class="action-panel-title">主要操作</p>
+          <div class="action-legend" aria-label="操作の見分け方">
+            <span class="legend-chip legend-start">開始</span>
+            <span class="legend-chip legend-break">休憩</span>
+            <span class="legend-chip legend-end">終了</span>
+          </div>
+        </div>
+        <div class="actions">
+          <button class="clock-action primary" :disabled="busy || loading || !canPerform(currentState, 'in')" @click="clock('in')" aria-label="出勤を記録" data-icon="▶">出勤を記録</button>
+          <button class="clock-action break-action" :disabled="busy || loading || !canPerform(currentState, isOnBreak ? 'break_end' : 'break_start')" @click="clock(isOnBreak ? 'break_end' : 'break_start')" :aria-label="isOnBreak ? '休憩終了を記録' : '休憩開始を記録'" :data-icon="isOnBreak ? '⏸' : '⏱'">{{ isOnBreak ? '休憩終了を記録' : '休憩開始を記録' }}</button>
+          <button class="clock-action danger" :disabled="busy || loading || !canPerform(currentState, 'out')" @click="clock('out')" aria-label="退勤を記録" data-icon="■">退勤を記録</button>
+        </div>
+        <p v-if="isOnBreak" class="action-hint" role="status">休憩中は「休憩終了」を押して勤務を再開してください。</p>
+        <p v-else-if="currentState === 'idle'" class="action-hint" role="status">出勤を記録してから休憩・退勤の操作が可能です。</p>
       </div>
       <p v-if="error" class="error" role="alert">{{ error }}</p>
     </section>
