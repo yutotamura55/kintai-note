@@ -76,7 +76,7 @@ export async function saveAttendanceTimes(
       updated_at=?4
     WHERE id=?5 AND user_id=?6 AND clock_in_at IS ?7 AND clock_out_at IS ?8
     AND (?2 IS NOT NULL OR NOT EXISTS (
-      SELECT 1 FROM attendance_records WHERE user_id=?6 AND id<>?5 AND clock_in_at IS NOT NULL AND clock_out_at IS NULL
+      SELECT 1 FROM attendance_records WHERE user_id=?6 AND id<>?5 AND ${OPEN_SHIFT_SQL}
     ))`).bind(clockInAt, clockOutAt, effectiveBreakMinutes, isoNow(), record.id, userId, record.clock_in_at, record.clock_out_at).run()
   if (!result.meta.changes) throw createError({ statusCode: 409, statusMessage: '記録が更新されたか、ほかに未退勤の勤務があります。画面を再読み込みして確認してください。' })
 }
