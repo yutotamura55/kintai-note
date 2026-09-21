@@ -27,9 +27,11 @@ export async function testOriginalTimes({ request, run, wrangler, current, legac
   assert.equal(restored.work_date, original.work_date)
   assert.equal((await restore(id)).status, 200, 'Repeated restore is safe.')
 
-  // Reopening and punching out again must not replace the FIRST clock-out.
+  // Clearing clock_out_at via a month-page edit must not reopen an already-punched-out shift:
+  // once a real clock-out is tracked, only a month-page edit can change the displayed time —
+  // punching "out" again is rejected, and original_clock_out_at never changes.
   assert.equal((await edit(id, '2002-01-01T09:00', '')).status, 200)
-  assert.equal((await request('/api/attendance/clock', { method: 'POST', body: JSON.stringify({ action: 'out', recordId: id }) })).status, 200)
+  assert.equal((await request('/api/attendance/clock', { method: 'POST', body: JSON.stringify({ action: 'out', recordId: id }) })).status, 409)
   assert.equal((await read(id, month)).original_clock_out_at, original.clock_out_at)
   assert.equal((await restore(id)).status, 200)
 

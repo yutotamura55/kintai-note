@@ -18,6 +18,55 @@ export function workDateAt(now: Date = new Date()): string {
   return new Date(now.getTime() + (9 - 4) * HOUR).toISOString().slice(0, 10)
 }
 
+// The four attendance states and their allowed transitions, kept in one place so the
+// dashboard UI and any future callers can never derive them inconsistently.
+//
+//   idle --(in)--> working --(break_start)--> on_break
+//                     ^                            |
+//                     |------------(break_end)------|
+//                     |
+//                     '--(out)--> done
+//
+// A new work day (JST 04:00 boundary, see workDateAt) starts a fresh record, so `done`
+// has no outgoing action from this table; the next `idle` comes from a brand-new record.
+export type AttendanceState = 'idle' | 'working' | 'on_break' | 'done'
+export type AttendanceAction = 'in' | 'break_start' | 'break_end' | 'out'
+
+export const ATTENDANCE_TRANSITIONS: Record<AttendanceState, Partial<Record<AttendanceAction, AttendanceState>>> = {
+  idle: { in: 'working' },
+  working: { break_start: 'on_break', out: 'done' },
+  on_break: { break_end: 'working' },
+  done: {},
+}
+
+// Derives the current state from a record's punch fields (no state column exists).
+//
+// `clock_in_at`/`clock_out_at` double as an editable display/PDF value (see records.vue)
+// and are NOT a reliable source of truth for state: editing or clearing them must never
+// resurrect a completed shift, and pre-filling a future clock-out must never end one early.
+// `original_clock_in_at`/`original_clock_out_at` are only ever set by an actual clock.post.ts
+// punch and are never modified by an edit, so once a real clock-in is tracked, only a real
+// clock-out (`original_clock_out_at`) can move the shift to `done` here.
+//
+// Rows created before original-time tracking existed (migration 0001) have
+// `original_clock_in_at === null` forever; for those legacy rows only, we fall back to the
+// editable fields since there is no tracked punch history to trust instead.
+export function attendanceState(
+  record: Pick<AttendanceRecord, 'clock_in_at' | 'clock_out_at' | 'original_clock_in_at' | 'original_clock_out_at' | 'break_started_at'> | null | undefined,
+): AttendanceState {
+  const trackedIn = record?.original_clock_in_at ?? null
+  const effectiveIn = trackedIn ?? record?.clock_in_at ?? null
+  if (!effectiveIn) return 'idle'
+  const effectiveOut = trackedIn ? (record?.original_clock_out_at ?? null) : (record?.clock_out_at ?? null)
+  if (effectiveOut) return 'done'
+  if (record?.break_started_at) return 'on_break'
+  return 'working'
+}
+
+export function canPerform(state: AttendanceState, action: AttendanceAction): boolean {
+  return action in ATTENDANCE_TRANSITIONS[state]
+}
+
 export function japanDateTime(value: string | null | undefined): string {
   return value ? new Date(new Date(value).getTime() + 9 * HOUR).toISOString().slice(0, 16) : ''
 }

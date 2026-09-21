@@ -2,11 +2,21 @@ import type { H3Event } from 'h3'
 import { db, isoNow } from './db'
 import type { AttendanceRecord } from '../../shared/utils/attendance'
 
+// A shift is "open" (not yet clocked out) per the same rule as attendanceState(): once a
+// real clock-in is tracked (original_clock_in_at), only a real clock-out closes it, so
+// editing clock_out_at can never reopen or close a tracked shift. Legacy rows that predate
+// original-time tracking (original_clock_in_at IS NULL) fall back to the editable fields.
+export const OPEN_SHIFT_SQL = `(
+    (original_clock_in_at IS NOT NULL AND original_clock_out_at IS NULL)
+    OR (original_clock_in_at IS NULL AND clock_in_at IS NOT NULL AND clock_out_at IS NULL)
+  )`
+export const EFFECTIVE_CLOCK_IN_SQL = 'COALESCE(original_clock_in_at, clock_in_at)'
+
 export function openAttendance(event: H3Event, userId: string) {
   // Old data may contain multiple unfinished records; resolve oldest first.
   return db(event).prepare(`SELECT * FROM attendance_records
-    WHERE user_id=? AND clock_in_at IS NOT NULL AND clock_out_at IS NULL
-    ORDER BY clock_in_at, id LIMIT 1`).bind(userId).first<AttendanceRecord>()
+    WHERE user_id=? AND ${OPEN_SHIFT_SQL}
+    ORDER BY ${EFFECTIVE_CLOCK_IN_SQL}, id LIMIT 1`).bind(userId).first<AttendanceRecord>()
 }
 
 export async function ownedAttendance(event: H3Event, userId: string, recordId: unknown) {
@@ -66,7 +76,7 @@ export async function saveAttendanceTimes(
       updated_at=?4
     WHERE id=?5 AND user_id=?6 AND clock_in_at IS ?7 AND clock_out_at IS ?8
     AND (?2 IS NOT NULL OR NOT EXISTS (
-      SELECT 1 FROM attendance_records WHERE user_id=?6 AND id<>?5 AND clock_in_at IS NOT NULL AND clock_out_at IS NULL
+      SELECT 1 FROM attendance_records WHERE user_id=?6 AND id<>?5 AND ${OPEN_SHIFT_SQL}
     ))`).bind(clockInAt, clockOutAt, effectiveBreakMinutes, isoNow(), record.id, userId, record.clock_in_at, record.clock_out_at).run()
   if (!result.meta.changes) throw createError({ statusCode: 409, statusMessage: '記録が更新されたか、ほかに未退勤の勤務があります。画面を再読み込みして確認してください。' })
 }
