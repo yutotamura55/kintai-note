@@ -39,13 +39,27 @@ export const ATTENDANCE_TRANSITIONS: Record<AttendanceState, Partial<Record<Atte
   done: {},
 }
 
-// Derives the current state from a record's punch fields alone (no state column exists).
+// Derives the current state from a record's punch fields (no state column exists).
+//
+// `clock_in_at`/`clock_out_at` double as an editable display/PDF value (see records.vue)
+// and are NOT a reliable source of truth for state: editing or clearing them must never
+// resurrect a completed shift, and pre-filling a future clock-out must never end one early.
+// `original_clock_in_at`/`original_clock_out_at` are only ever set by an actual clock.post.ts
+// punch and are never modified by an edit, so once a real clock-in is tracked, only a real
+// clock-out (`original_clock_out_at`) can move the shift to `done` here.
+//
+// Rows created before original-time tracking existed (migration 0001) have
+// `original_clock_in_at === null` forever; for those legacy rows only, we fall back to the
+// editable fields since there is no tracked punch history to trust instead.
 export function attendanceState(
-  record: Pick<AttendanceRecord, 'clock_in_at' | 'clock_out_at' | 'break_started_at'> | null | undefined,
+  record: Pick<AttendanceRecord, 'clock_in_at' | 'clock_out_at' | 'original_clock_in_at' | 'original_clock_out_at' | 'break_started_at'> | null | undefined,
 ): AttendanceState {
-  if (!record?.clock_in_at) return 'idle'
-  if (record.clock_out_at) return 'done'
-  if (record.break_started_at) return 'on_break'
+  const trackedIn = record?.original_clock_in_at ?? null
+  const effectiveIn = trackedIn ?? record?.clock_in_at ?? null
+  if (!effectiveIn) return 'idle'
+  const effectiveOut = trackedIn ? (record?.original_clock_out_at ?? null) : (record?.clock_out_at ?? null)
+  if (effectiveOut) return 'done'
+  if (record?.break_started_at) return 'on_break'
   return 'working'
 }
 

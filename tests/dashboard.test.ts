@@ -161,8 +161,8 @@ test('done state keeps the clock-in button disabled (idle vs done regression)', 
   assert.match(html, /<button[^>]*disabled[^>]*aria-label="出勤を記録"/)
 })
 
-test('reopened record (edited-out clock-out) is treated as working, not done, despite a preserved original clock-out', async () => {
-  const reopenedToday = {
+test('a real clock-out stays done even if clock_out_at is later cleared by a month-page edit', async () => {
+  const editedOutToday = {
     date: '2026-09-18',
     record: null,
     openRecord: {
@@ -172,12 +172,12 @@ test('reopened record (edited-out clock-out) is treated as working, not done, de
       break_started_at: null,
     },
   }
-  const view = await page(async (path: string) => path === '/api/auth/me' ? { display_name: 'Test', role: 'member' } : reopenedToday)
+  const view = await page(async (path: string) => path === '/api/auth/me' ? { display_name: 'Test', role: 'member' } : editedOutToday)
   const html = await view.html()
-  assert.equal(view.state.currentState, 'working')
-  assert.match(html, /勤務中/)
+  assert.equal(view.state.currentState, 'done')
+  assert.match(html, /退勤済み/)
   assert.match(html, /<button[^>]*disabled[^>]*aria-label="出勤を記録"/)
-  assert.doesNotMatch(html, /<button[^>]*disabled[^>]*aria-label="退勤を記録"/)
+  assert.match(html, /<button[^>]*disabled[^>]*aria-label="退勤を記録"/)
 })
 
 test('dashboard uses original punch times after a manual edit', async () => {

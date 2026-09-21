@@ -18,17 +18,33 @@ for (const [instant, expected] of [
   test(`work date: ${instant}`, () => assert.equal(workDateAt(new Date(instant)), expected))
 }
 
-test('attendanceState derives idle/working/on_break/done from punch fields alone', () => {
+test('attendanceState derives idle/working/on_break/done from punch fields alone (legacy rows with no original_* tracking)', () => {
   assert.equal(attendanceState(null), 'idle')
-  assert.equal(attendanceState({ clock_in_at: null, clock_out_at: null, break_started_at: null }), 'idle')
-  assert.equal(attendanceState({ clock_in_at: '2026-09-17T00:00:00Z', clock_out_at: null, break_started_at: null }), 'working')
-  assert.equal(attendanceState({ clock_in_at: '2026-09-17T00:00:00Z', clock_out_at: null, break_started_at: '2026-09-17T04:00:00Z' }), 'on_break')
-  assert.equal(attendanceState({ clock_in_at: '2026-09-17T00:00:00Z', clock_out_at: '2026-09-17T08:00:00Z', break_started_at: null }), 'done')
+  assert.equal(attendanceState({ clock_in_at: null, clock_out_at: null, original_clock_in_at: null, original_clock_out_at: null, break_started_at: null }), 'idle')
+  assert.equal(attendanceState({ clock_in_at: '2026-09-17T00:00:00Z', clock_out_at: null, original_clock_in_at: null, original_clock_out_at: null, break_started_at: null }), 'working')
+  assert.equal(attendanceState({ clock_in_at: '2026-09-17T00:00:00Z', clock_out_at: null, original_clock_in_at: null, original_clock_out_at: null, break_started_at: '2026-09-17T04:00:00Z' }), 'on_break')
+  assert.equal(attendanceState({ clock_in_at: '2026-09-17T00:00:00Z', clock_out_at: '2026-09-17T08:00:00Z', original_clock_in_at: null, original_clock_out_at: null, break_started_at: null }), 'done')
   // Regression guard: idle and done must never collapse to the same state.
   assert.notEqual(
-    attendanceState({ clock_in_at: null, clock_out_at: null, break_started_at: null }),
-    attendanceState({ clock_in_at: '2026-09-17T00:00:00Z', clock_out_at: '2026-09-17T08:00:00Z', break_started_at: null }),
+    attendanceState({ clock_in_at: null, clock_out_at: null, original_clock_in_at: null, original_clock_out_at: null, break_started_at: null }),
+    attendanceState({ clock_in_at: '2026-09-17T00:00:00Z', clock_out_at: '2026-09-17T08:00:00Z', original_clock_in_at: null, original_clock_out_at: null, break_started_at: null }),
   )
+})
+
+test('attendanceState prefers original_* over the editable fields once a real clock-in is tracked', () => {
+  const trackedWorking = { clock_in_at: '2026-09-17T00:00:00Z', clock_out_at: null, original_clock_in_at: '2026-09-17T00:00:00Z', original_clock_out_at: null, break_started_at: null }
+  assert.equal(attendanceState(trackedWorking), 'working')
+
+  // Pre-filling clock_out_at via a month-page edit, before actually punching out, must not
+  // end the shift early (this was the root cause of the Copilot-flagged Medium finding).
+  assert.equal(attendanceState({ ...trackedWorking, clock_out_at: '2026-09-17T05:00:00Z' }), 'working')
+
+  const trackedDone = { ...trackedWorking, clock_out_at: '2026-09-17T08:00:00Z', original_clock_out_at: '2026-09-17T08:00:00Z' }
+  assert.equal(attendanceState(trackedDone), 'done')
+
+  // Clearing clock_out_at via a month-page edit must not reopen an already-punched-out shift;
+  // original_clock_out_at is immutable once a real clock-out has happened.
+  assert.equal(attendanceState({ ...trackedDone, clock_out_at: null }), 'done')
 })
 
 test('canPerform only allows the modeled transitions per state', () => {
