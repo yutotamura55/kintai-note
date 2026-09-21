@@ -5,7 +5,7 @@ import { createRequire, stripTypeScriptTypes } from 'node:module'
 import { ref, computed, proxyRefs, createSSRApp } from 'vue'
 import { renderToString } from '@vue/server-renderer'
 import { compile } from '@vue/compiler-ssr'
-import { displayJapanDateTime } from '../shared/utils/attendance.ts'
+import { displayJapanDateTime, attendanceState, canPerform } from '../shared/utils/attendance.ts'
 
 // Run the actual page script and template; replace only Nuxt/network/lifecycle boundaries.
 const source = readFileSync(new URL('../app/pages/dashboard.vue', import.meta.url), 'utf8')
@@ -16,12 +16,12 @@ async function page(api: Function, post: Function = async () => ({}), redirect: 
   const document = { visibilityState: 'visible', addEventListener: (event: string, callback: Function) => { lifecycle[`document:${event}`] = callback }, removeEventListener: () => {} }
   lifecycle.document = document
   const dependencies = { ref, computed, useRouter: () => ({ replace: redirect }), useRequestFetch: () => api,
-    $fetch: post, displayJapanDateTime,
+    $fetch: post, displayJapanDateTime, attendanceState, canPerform,
     onMounted: (callback: Function) => { lifecycle.mounted = callback }, onUnmounted: (callback: Function) => { lifecycle.unmounted = callback },
     setInterval: () => { lifecycle.intervalCalls = (lifecycle.intervalCalls || 0) + 1; return 1 }, clearInterval: () => {},
     window: { addEventListener: (event: string, callback: Function) => { lifecycle[`window:${event}`] = callback }, removeEventListener: () => {} },
     document }
-  const state = await new AsyncFunction(...Object.keys(dependencies), `${script}\nreturn { me, today, error, busy, displayedRecord, punchRecord, previousOpen, correctionLink, load, clock, logout, displayJapanDateTime, isOnBreak, statusInfo, ...(typeof loadError !== 'undefined' ? {loadError} : {}), ...(typeof loading !== 'undefined' ? {loading} : {}) }`)(...Object.values(dependencies))
+  const state = await new AsyncFunction(...Object.keys(dependencies), `${script}\nreturn { me, today, error, busy, displayedRecord, punchRecord, previousOpen, correctionLink, load, clock, logout, displayJapanDateTime, currentState, isOnBreak, statusInfo, canPerform, ...(typeof loadError !== 'undefined' ? {loadError} : {}), ...(typeof loading !== 'undefined' ? {loading} : {}) }`)(...Object.values(dependencies))
   return { state: proxyRefs(state), html: () => {
     const app = createSSRApp({ setup: () => state, ssrRender: render })
     app.component('NuxtLink', { template: '<a><slot /></a>' })
@@ -131,6 +131,53 @@ test('break button toggles and clock-out is disabled when on break', async () =>
   assert.match(html, /休憩中/)
   assert.match(html, /休憩終了を記録/)
   assert.match(html, /<button[^>]*disabled[^>]*>退勤を記録/)
+})
+
+test('action panel uses distinct visual groups for start, break and end actions', async () => {
+  const onBreakToday = {
+    date: '2026-09-18', record: null,
+    openRecord: { id: 'shift-a', work_date: '2026-09-17', clock_in_at: '2026-09-17T00:00:00.000Z', clock_out_at: null, break_started_at: '2026-09-17T04:00:00.000Z' }
+  }
+  const view = await page(async (path: string) => path === '/api/auth/me' ? { display_name: 'Test', role: 'member' } : onBreakToday)
+  const html = await view.html()
+  assert.match(html, /主要操作/)
+  assert.match(html, /class="[^"]*clock-action[^"]*primary[^"]*"/)
+  assert.match(html, /class="[^"]*clock-action[^"]*break-action[^"]*"/)
+  assert.match(html, /class="[^"]*clock-action[^"]*danger[^"]*"/)
+  assert.match(html, /休憩中は「休憩終了」を押して勤務を再開してください/)
+  assert.match(html, /<button[^>]*disabled[^>]*aria-label="出勤を記録"/)
+})
+
+test('done state keeps the clock-in button disabled (idle vs done regression)', async () => {
+  const completedToday = {
+    date: '2026-09-18',
+    record: { id: 'shift-a', work_date: '2026-09-18', clock_in_at: '2026-09-18T00:00:00.000Z', clock_out_at: '2026-09-18T08:00:00.000Z' },
+    openRecord: null,
+  }
+  const view = await page(async (path: string) => path === '/api/auth/me' ? { display_name: 'Test', role: 'member' } : completedToday)
+  const html = await view.html()
+  assert.equal(view.state.currentState, 'done')
+  assert.match(html, /退勤済み/)
+  assert.match(html, /<button[^>]*disabled[^>]*aria-label="出勤を記録"/)
+})
+
+test('a real clock-out stays done even if clock_out_at is later cleared by a month-page edit', async () => {
+  const editedOutToday = {
+    date: '2026-09-18',
+    record: null,
+    openRecord: {
+      id: 'shift-a', work_date: '2026-09-18',
+      clock_in_at: '2026-09-18T00:00:00.000Z', clock_out_at: null,
+      original_clock_in_at: '2026-09-18T00:00:00.000Z', original_clock_out_at: '2026-09-18T08:00:00.000Z',
+      break_started_at: null,
+    },
+  }
+  const view = await page(async (path: string) => path === '/api/auth/me' ? { display_name: 'Test', role: 'member' } : editedOutToday)
+  const html = await view.html()
+  assert.equal(view.state.currentState, 'done')
+  assert.match(html, /退勤済み/)
+  assert.match(html, /<button[^>]*disabled[^>]*aria-label="出勤を記録"/)
+  assert.match(html, /<button[^>]*disabled[^>]*aria-label="退勤を記録"/)
 })
 
 test('dashboard uses original punch times after a manual edit', async () => {

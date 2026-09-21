@@ -1,6 +1,6 @@
 import { currentUser } from '~~/server/utils/auth'
 import { db, id } from '~~/server/utils/db'
-import { openAttendance } from '~~/server/utils/attendance'
+import { openAttendance, OPEN_SHIFT_SQL, EFFECTIVE_CLOCK_IN_SQL } from '~~/server/utils/attendance'
 import { workDateAt } from '~~/shared/utils/attendance'
 export default defineEventHandler(async (event) => {
   const user = await currentUser(event); const { action, recordId } = await readBody(event) || {}
@@ -10,7 +10,7 @@ export default defineEventHandler(async (event) => {
     // Guard and write in one statement: concurrent requests cannot overwrite a clock-in.
     const result = await db(event).prepare(`INSERT INTO attendance_records (id, user_id, work_date, clock_in_at, original_clock_in_at, updated_at)
       SELECT ?1, ?2, ?3, ?4, ?4, ?4 WHERE NOT EXISTS (
-        SELECT 1 FROM attendance_records WHERE user_id=?2 AND clock_in_at IS NOT NULL AND clock_out_at IS NULL
+        SELECT 1 FROM attendance_records WHERE user_id=?2 AND ${OPEN_SHIFT_SQL}
       ) ON CONFLICT(user_id, work_date) DO UPDATE SET clock_in_at=excluded.clock_in_at, original_clock_in_at=COALESCE(attendance_records.original_clock_in_at, excluded.original_clock_in_at), updated_at=excluded.updated_at
       WHERE attendance_records.clock_in_at IS NULL`).bind(id(), user.id, date, now).run()
     if (!result.meta.changes) {
@@ -23,11 +23,11 @@ export default defineEventHandler(async (event) => {
     const targetId = typeof recordId === 'string' && recordId.trim() ? recordId.trim() : (await openAttendance(event, user.id))?.id
     if (!targetId) throw createError({ statusCode: 400, statusMessage: '勤務中の記録がありません。' })
     const result = await db(event).prepare(`UPDATE attendance_records SET break_started_at=?1, updated_at=?1
-      WHERE id=?2 AND user_id=?3 AND clock_out_at IS NULL AND clock_in_at IS NOT NULL
-      AND break_started_at IS NULL AND clock_in_at <= ?1
+      WHERE id=?2 AND user_id=?3 AND ${OPEN_SHIFT_SQL}
+      AND break_started_at IS NULL AND ${EFFECTIVE_CLOCK_IN_SQL} <= ?1
       AND id=(SELECT id FROM attendance_records
-        WHERE user_id=?3 AND clock_in_at IS NOT NULL AND clock_out_at IS NULL
-        ORDER BY clock_in_at, id LIMIT 1)`).bind(now, targetId, user.id).run()
+        WHERE user_id=?3 AND ${OPEN_SHIFT_SQL}
+        ORDER BY ${EFFECTIVE_CLOCK_IN_SQL}, id LIMIT 1)`).bind(now, targetId, user.id).run()
     if (!result.meta.changes) {
       throw createError({ statusCode: 409, statusMessage: 'すでに休憩中であるか、勤務中でないため休憩を開始できません。' })
     }
@@ -39,11 +39,11 @@ export default defineEventHandler(async (event) => {
       original_total_break_seconds = original_total_break_seconds + max(0, strftime('%s', ?1) - strftime('%s', break_started_at)),
       break_started_at = NULL,
       updated_at = ?1
-      WHERE id=?2 AND user_id=?3 AND clock_out_at IS NULL AND break_started_at IS NOT NULL
+      WHERE id=?2 AND user_id=?3 AND ${OPEN_SHIFT_SQL} AND break_started_at IS NOT NULL
       AND break_started_at <= ?1
       AND id=(SELECT id FROM attendance_records
-        WHERE user_id=?3 AND clock_in_at IS NOT NULL AND clock_out_at IS NULL
-        ORDER BY clock_in_at, id LIMIT 1)`).bind(now, targetId, user.id).run()
+        WHERE user_id=?3 AND ${OPEN_SHIFT_SQL}
+        ORDER BY ${EFFECTIVE_CLOCK_IN_SQL}, id LIMIT 1)`).bind(now, targetId, user.id).run()
     if (!result.meta.changes) {
       throw createError({ statusCode: 409, statusMessage: '休憩中ではないか、記録が更新されているため休憩を終了できません。' })
     }
@@ -58,10 +58,10 @@ export default defineEventHandler(async (event) => {
     }
     // Keep the requested ID and enforce oldest-first atomically (same ordering as openAttendance).
     const result = await db(event).prepare(`UPDATE attendance_records SET clock_out_at=?1, original_clock_out_at=COALESCE(original_clock_out_at, ?1), updated_at=?1
-      WHERE id=?2 AND user_id=?3 AND clock_out_at IS NULL AND clock_in_at < ?1 AND break_started_at IS NULL
+      WHERE id=?2 AND user_id=?3 AND ${OPEN_SHIFT_SQL} AND ${EFFECTIVE_CLOCK_IN_SQL} < ?1 AND break_started_at IS NULL
       AND id=(SELECT id FROM attendance_records
-        WHERE user_id=?3 AND clock_in_at IS NOT NULL AND clock_out_at IS NULL
-        ORDER BY clock_in_at, id LIMIT 1)`).bind(now, recordId, user.id).run()
+        WHERE user_id=?3 AND ${OPEN_SHIFT_SQL}
+        ORDER BY ${EFFECTIVE_CLOCK_IN_SQL}, id LIMIT 1)`).bind(now, recordId, user.id).run()
     if (!result.meta.changes) throw createError({ statusCode: 409, statusMessage: '記録が更新されたか、先に退勤すべき勤務があるか、出勤日時が現在以降です。画面を更新して確認してください。' })
   }
   return { ok: true }
