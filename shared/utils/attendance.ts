@@ -18,6 +18,41 @@ export function workDateAt(now: Date = new Date()): string {
   return new Date(now.getTime() + (9 - 4) * HOUR).toISOString().slice(0, 10)
 }
 
+// The four attendance states and their allowed transitions, kept in one place so the
+// dashboard UI and any future callers can never derive them inconsistently.
+//
+//   idle --(in)--> working --(break_start)--> on_break
+//                     ^                            |
+//                     |------------(break_end)------|
+//                     |
+//                     '--(out)--> done
+//
+// A new work day (JST 04:00 boundary, see workDateAt) starts a fresh record, so `done`
+// has no outgoing action from this table; the next `idle` comes from a brand-new record.
+export type AttendanceState = 'idle' | 'working' | 'on_break' | 'done'
+export type AttendanceAction = 'in' | 'break_start' | 'break_end' | 'out'
+
+export const ATTENDANCE_TRANSITIONS: Record<AttendanceState, Partial<Record<AttendanceAction, AttendanceState>>> = {
+  idle: { in: 'working' },
+  working: { break_start: 'on_break', out: 'done' },
+  on_break: { break_end: 'working' },
+  done: {},
+}
+
+// Derives the current state from a record's punch fields alone (no state column exists).
+export function attendanceState(
+  record: Pick<AttendanceRecord, 'clock_in_at' | 'clock_out_at' | 'break_started_at'> | null | undefined,
+): AttendanceState {
+  if (!record?.clock_in_at) return 'idle'
+  if (record.clock_out_at) return 'done'
+  if (record.break_started_at) return 'on_break'
+  return 'working'
+}
+
+export function canPerform(state: AttendanceState, action: AttendanceAction): boolean {
+  return action in ATTENDANCE_TRANSITIONS[state]
+}
+
 export function japanDateTime(value: string | null | undefined): string {
   return value ? new Date(new Date(value).getTime() + 9 * HOUR).toISOString().slice(0, 16) : ''
 }
