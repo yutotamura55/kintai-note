@@ -161,6 +161,25 @@ test('done state keeps the clock-in button disabled (idle vs done regression)', 
   assert.match(html, /<button[^>]*disabled[^>]*aria-label="出勤を記録"/)
 })
 
+test('reopened record (edited-out clock-out) is treated as working, not done, despite a preserved original clock-out', async () => {
+  const reopenedToday = {
+    date: '2026-09-18',
+    record: null,
+    openRecord: {
+      id: 'shift-a', work_date: '2026-09-18',
+      clock_in_at: '2026-09-18T00:00:00.000Z', clock_out_at: null,
+      original_clock_in_at: '2026-09-18T00:00:00.000Z', original_clock_out_at: '2026-09-18T08:00:00.000Z',
+      break_started_at: null,
+    },
+  }
+  const view = await page(async (path: string) => path === '/api/auth/me' ? { display_name: 'Test', role: 'member' } : reopenedToday)
+  const html = await view.html()
+  assert.equal(view.state.currentState, 'working')
+  assert.match(html, /勤務中/)
+  assert.match(html, /<button[^>]*disabled[^>]*aria-label="出勤を記録"/)
+  assert.doesNotMatch(html, /<button[^>]*disabled[^>]*aria-label="退勤を記録"/)
+})
+
 test('dashboard uses original punch times after a manual edit', async () => {
   const today = {
     date: '2026-09-18',

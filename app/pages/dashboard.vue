@@ -17,7 +17,7 @@ const previousOpen = computed(() => today.value?.openRecord && today.value.openR
 const correctionLink = computed(() => ({ path: '/records', query: {
   month: today.value?.openRecord?.work_date.slice(0, 7), edit: today.value?.openRecord?.id,
 } }))
-const currentState = computed(() => attendanceState(punchRecord.value))
+const currentState = computed(() => attendanceState(displayedRecord.value))
 const isOnBreak = computed(() => currentState.value === 'on_break')
 const statusInfo = computed(() => {
   if (currentState.value === 'idle') return { label: '未出勤', class: 'status-default' }
