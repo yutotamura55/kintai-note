@@ -10,6 +10,28 @@
 4. `.dev.vars.example` を `.dev.vars` として複製し、初期管理者作成用トークンを設定。
 5. `npm run dev` で起動し、`/setup` で最初の管理者を作成します。管理者作成後は `BOOTSTRAP_TOKEN` を削除してください。
 
+### Docker での開発
+
+Docker と Docker Compose があれば、Node.js のバージョンや npm の依存関係をホストへインストールせずに開発できます。
+
+```bash
+docker compose up --build
+```
+
+ブラウザで `http://localhost:3000` を開きます。ソースコードはコンテナへマウントされるため、編集内容は自動的に反映されます。終了するときは `Ctrl+C` を押すか、別のターミナルで次を実行します。
+
+```bash
+docker compose down
+```
+
+単体テストは次のコマンドで実行できます。
+
+```bash
+docker compose run --rm app npm run test:unit
+```
+
+`.dev.vars` を使う場合は、リポジトリのホスト側に作成してください。`.dev.vars` や `.env` はイメージへコピーされません。Compose の設定は開発用であり、本番の Worker と D1 は従来どおり Wrangler と GitHub Actions からデプロイします。
+
 ## ローカル検証
 
 Node.js 22 を使って、次のコマンドを実行します。
