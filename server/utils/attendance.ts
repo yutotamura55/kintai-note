@@ -70,9 +70,11 @@ export async function saveAttendanceTimes(
       clock_in_at=?1,
       clock_out_at=?2,
       break_minutes=?3,
-      total_break_seconds = total_break_seconds + CASE WHEN ?2 IS NOT NULL AND break_started_at IS NOT NULL THEN max(0, strftime('%s', ?2) - strftime('%s', break_started_at)) ELSE 0 END,
-      original_total_break_seconds = original_total_break_seconds + CASE WHEN ?2 IS NOT NULL AND break_started_at IS NOT NULL THEN max(0, strftime('%s', ?2) - strftime('%s', break_started_at)) ELSE 0 END,
-      break_started_at = CASE WHEN ?2 IS NOT NULL THEN NULL ELSE break_started_at END,
+      total_break_seconds = CASE WHEN original_clock_in_at IS NULL AND ?2 IS NOT NULL AND break_started_at IS NOT NULL
+        THEN total_break_seconds + max(0, strftime('%s', ?2) - strftime('%s', break_started_at)) ELSE total_break_seconds END,
+      original_total_break_seconds = CASE WHEN original_clock_in_at IS NULL AND ?2 IS NOT NULL AND break_started_at IS NOT NULL
+        THEN original_total_break_seconds + max(0, strftime('%s', ?2) - strftime('%s', break_started_at)) ELSE original_total_break_seconds END,
+      break_started_at = CASE WHEN original_clock_in_at IS NULL AND ?2 IS NOT NULL THEN NULL ELSE break_started_at END,
       updated_at=?4
     WHERE id=?5 AND user_id=?6 AND clock_in_at IS ?7 AND clock_out_at IS ?8
     AND (?2 IS NOT NULL OR NOT EXISTS (
