@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { displayJapanDateTime, attendanceState, canPerform } from '~~/shared/utils/attendance'
+import { displayJapanDateTime, attendanceState, canPerform, calculateOriginalBreakMinutes, calculateOriginalWorkMinutes, formatDurationHuman } from '~~/shared/utils/attendance'
 const router = useRouter(); const today = ref<any>(); const me = ref<any>(); const error = ref(''); const busy = ref(false)
 const loadError = ref(''); const loading = ref(false)
+const liveNow = ref(new Date())
+let durationTimer: ReturnType<typeof setInterval> | undefined
 const api = useRequestFetch()
 const displayedRecord = computed(() => today.value?.openRecord || today.value?.record)
 const punchRecord = computed(() => {
@@ -18,6 +20,8 @@ const correctionLink = computed(() => ({ path: '/records', query: {
   month: today.value?.openRecord?.work_date.slice(0, 7), edit: today.value?.openRecord?.id,
 } }))
 const currentState = computed(() => attendanceState(displayedRecord.value))
+const breakMinutes = computed(() => displayedRecord.value ? calculateOriginalBreakMinutes(displayedRecord.value, liveNow.value) : null)
+const workMinutes = computed(() => displayedRecord.value ? calculateOriginalWorkMinutes(displayedRecord.value, liveNow.value) : null)
 const isOnBreak = computed(() => currentState.value === 'on_break')
 const statusInfo = computed(() => {
   if (currentState.value === 'idle') return { label: '未出勤', class: 'status-default' }
@@ -54,12 +58,15 @@ async function clock(action: 'in' | 'out' | 'break_start' | 'break_end') {
 }
 async function logout() { await $fetch('/api/auth/logout', { method: 'POST' }); await router.replace('/login') }
 await load()
+function updateLiveDuration() { liveNow.value = new Date() }
 function refreshAfterReturn() { if (!busy.value && document.visibilityState === 'visible') void load() }
 onMounted(() => {
+  durationTimer = setInterval(updateLiveDuration, 60_000)
   window.addEventListener('focus', refreshAfterReturn)
   document.addEventListener('visibilitychange', refreshAfterReturn)
 })
 onUnmounted(() => {
+  if (durationTimer) clearInterval(durationTimer)
   window.removeEventListener('focus', refreshAfterReturn)
   document.removeEventListener('visibilitychange', refreshAfterReturn)
 })
@@ -88,6 +95,10 @@ onUnmounted(() => {
       <div class="times">
         <div><span>出勤（日本時間）</span><strong>{{ displayJapanDateTime(punchRecord?.clock_in_at) }}</strong></div>
         <div><span>退勤（日本時間）</span><strong>{{ displayJapanDateTime(punchRecord?.clock_out_at) }}</strong></div>
+      </div>
+      <div v-if="displayedRecord" class="durations" aria-live="polite">
+        <div><span>休憩時間</span><strong>{{ formatDurationHuman(breakMinutes) }}</strong></div>
+        <div><span>実労働時間</span><strong>{{ formatDurationHuman(workMinutes) }}</strong></div>
       </div>
       <div class="action-panel" aria-live="polite">
         <div class="action-panel-header">
@@ -120,7 +131,12 @@ onUnmounted(() => {
 .status-working { background: #e6f7ec; color: #167a3a; }
 .status-break { background: #fff4e5; color: #b45309; }
 .status-done { background: #e9efff; color: #315dc5; }
+.durations { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin: 16px 0; }
+.durations > div { display: flex; flex-direction: column; gap: 4px; padding: 12px; border-radius: 10px; background: #f7f9fc; }
+.durations span { color: #59647a; font-size: .85rem; }
+.durations strong { font-size: 1.15rem; }
 @media (max-width: 520px) {
   .clock-status-bar { flex-direction: column; gap: 6px; }
+  .durations { grid-template-columns: 1fr; }
 }
 </style>

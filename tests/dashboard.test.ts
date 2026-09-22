@@ -5,7 +5,7 @@ import { createRequire, stripTypeScriptTypes } from 'node:module'
 import { ref, computed, proxyRefs, createSSRApp } from 'vue'
 import { renderToString } from '@vue/server-renderer'
 import { compile } from '@vue/compiler-ssr'
-import { displayJapanDateTime, attendanceState, canPerform } from '../shared/utils/attendance.ts'
+import { displayJapanDateTime, attendanceState, canPerform, calculateOriginalBreakMinutes, calculateOriginalWorkMinutes, formatDurationHuman } from '../shared/utils/attendance.ts'
 
 // Run the actual page script and template; replace only Nuxt/network/lifecycle boundaries.
 const source = readFileSync(new URL('../app/pages/dashboard.vue', import.meta.url), 'utf8')
@@ -16,12 +16,12 @@ async function page(api: Function, post: Function = async () => ({}), redirect: 
   const document = { visibilityState: 'visible', addEventListener: (event: string, callback: Function) => { lifecycle[`document:${event}`] = callback }, removeEventListener: () => {} }
   lifecycle.document = document
   const dependencies = { ref, computed, useRouter: () => ({ replace: redirect }), useRequestFetch: () => api,
-    $fetch: post, displayJapanDateTime, attendanceState, canPerform,
+    $fetch: post, displayJapanDateTime, attendanceState, canPerform, calculateOriginalBreakMinutes, calculateOriginalWorkMinutes, formatDurationHuman,
     onMounted: (callback: Function) => { lifecycle.mounted = callback }, onUnmounted: (callback: Function) => { lifecycle.unmounted = callback },
-    setInterval: () => { lifecycle.intervalCalls = (lifecycle.intervalCalls || 0) + 1; return 1 }, clearInterval: () => {},
+    setInterval: (callback: Function, delay: number) => { lifecycle.intervalCalls = (lifecycle.intervalCalls || 0) + 1; lifecycle.intervalCallback = callback; lifecycle.intervalDelay = delay; return 1 }, clearInterval: () => {},
     window: { addEventListener: (event: string, callback: Function) => { lifecycle[`window:${event}`] = callback }, removeEventListener: () => {} },
     document }
-  const state = await new AsyncFunction(...Object.keys(dependencies), `${script}\nreturn { me, today, error, busy, displayedRecord, punchRecord, previousOpen, correctionLink, load, clock, logout, displayJapanDateTime, currentState, isOnBreak, statusInfo, canPerform, ...(typeof loadError !== 'undefined' ? {loadError} : {}), ...(typeof loading !== 'undefined' ? {loading} : {}) }`)(...Object.values(dependencies))
+  const state = await new AsyncFunction(...Object.keys(dependencies), `${script}\nreturn { me, today, error, busy, displayedRecord, punchRecord, previousOpen, correctionLink, load, clock, logout, displayJapanDateTime, currentState, isOnBreak, statusInfo, canPerform, breakMinutes, workMinutes, formatDurationHuman, ...(typeof loadError !== 'undefined' ? {loadError} : {}), ...(typeof loading !== 'undefined' ? {loading} : {}) }`)(...Object.values(dependencies))
   return { state: proxyRefs(state), html: () => {
     const app = createSSRApp({ setup: () => state, ssrRender: render })
     app.component('NuxtLink', { template: '<a><slot /></a>' })
@@ -76,14 +76,23 @@ test('clock buttons are disabled while a refresh is in flight', async () => {
   } finally { release(); await refresh }
 })
 
-test('dashboard has no idle timer or duration display', async () => {
+test('dashboard displays original break and work durations without polling the API', async () => {
   const lifecycle: Record<string, any> = {}
-  const view = await page(success, undefined, undefined, lifecycle)
+  const durationToday = {
+    date: '2026-09-18', record: null,
+    openRecord: { id: 'shift-a', work_date: '2026-09-17', clock_in_at: '2026-09-17T20:00:00.000Z', clock_out_at: null,
+      original_clock_in_at: '2026-09-17T00:00:00.000Z', original_clock_out_at: null,
+      original_total_break_seconds: 1800, total_break_seconds: 9999, break_started_at: null, break_minutes: 15 }
+  }
+  const view = await page(async (path: string) => path === '/api/auth/me' ? { display_name: 'Test', role: 'member' } : durationToday, undefined, undefined, lifecycle)
   lifecycle.mounted()
-  assert.equal(lifecycle.intervalCalls || 0, 0)
+  assert.equal(lifecycle.intervalCalls, 1)
+  assert.equal(lifecycle.intervalDelay, 60_000)
   const html = await view.html()
-  assert.doesNotMatch(html, /休憩時間/)
-  assert.doesNotMatch(html, /実労働時間/)
+  assert.match(html, /休憩時間/)
+  assert.match(html, /実労働時間/)
+  assert.match(html, /0時間30分/)
+  assert.match(html, /実労働時間/)
 })
 
 test('returning to a visible or focused dashboard synchronizes with the server', async () => {
