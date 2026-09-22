@@ -21,3 +21,10 @@
 - Use lowercase kebab-case for `<short-purpose>`, for example `feat/21-live-attendance-duration`.
 - Create pull requests from the dedicated branch into `main`. Do not push feature work directly to `main`.
 - If work is found on a branch whose name or scope does not follow this policy, preserve unrelated user changes and move the requested work to a correctly named branch before creating or updating a pull request.
+
+## GitHub authentication
+
+- Use the authenticated `gh` CLI for GitHub operations whenever possible.
+- If `gh` reports that authentication is missing or invalid, run `gh auth login` interactively and ask the user to complete the authentication prompts.
+- Do not silently fall back to hand-written GitHub API requests or use another account when `gh` authentication fails.
+- Resume the requested GitHub operation only after `gh auth status` confirms a valid login.
