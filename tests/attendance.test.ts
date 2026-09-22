@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { workDateAt, japanDateTime, parseJapanDateTime, displayJapanDateTime,
   calculateBreakMinutes, calculateWorkMinutes, calculatePunchBreakMinutes, calculatePunchWorkMinutes,
+  calculateOriginalBreakMinutes, calculateOriginalWorkMinutes,
   formatDuration, formatDurationHuman, attendanceState, canPerform } from '../shared/utils/attendance.ts'
 
 for (const [instant, expected] of [
@@ -145,6 +146,31 @@ test('punch duration calculations ignore manual break overrides', () => {
   }
   assert.equal(calculatePunchBreakMinutes(record), 60)
   assert.equal(calculatePunchWorkMinutes(record), 480)
+})
+
+test('original punch duration calculations ignore monthly edits', () => {
+  const record = {
+    id: 'original', work_date: '2026-09-17',
+    clock_in_at: '2026-09-17T00:00:00.000Z', clock_out_at: '2026-09-17T20:00:00.000Z',
+    original_clock_in_at: '2026-09-17T01:00:00.000Z', original_clock_out_at: '2026-09-17T09:00:00.000Z',
+    total_break_seconds: 9999, original_total_break_seconds: 3600, break_minutes: 15,
+  }
+  assert.equal(calculateOriginalBreakMinutes(record), 60)
+  assert.equal(calculateOriginalWorkMinutes(record), 420)
+})
+
+test('original punch duration keeps updating in the browser while working or on break', () => {
+  const now = new Date('2026-09-17T04:00:00.000Z')
+  const working = {
+    id: 'working', work_date: '2026-09-17', clock_in_at: null, clock_out_at: null,
+    original_clock_in_at: '2026-09-17T00:00:00.000Z', original_clock_out_at: null,
+    original_total_break_seconds: 1800, total_break_seconds: 0, break_started_at: null,
+  }
+  assert.equal(calculateOriginalBreakMinutes(working, now), 30)
+  assert.equal(calculateOriginalWorkMinutes(working, now), 210)
+  const onBreak = { ...working, break_started_at: '2026-09-17T03:30:00.000Z' }
+  assert.equal(calculateOriginalBreakMinutes(onBreak, now), 60)
+  assert.equal(calculateOriginalWorkMinutes(onBreak, now), 180)
 })
 
 test('formatDuration formats minutes cleanly', () => {

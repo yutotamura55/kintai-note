@@ -129,6 +129,33 @@ export function calculatePunchWorkMinutes(record: AttendanceRecord, now: Date = 
   return Math.max(0, grossMinutes - breakMinutes)
 }
 
+/** Duration used by the live dashboard. Once original punch tracking exists, editable
+ * month-page values are deliberately ignored. Legacy rows fall back to their stored fields. */
+export function calculateOriginalBreakMinutes(record: AttendanceRecord, now: Date = new Date()): number {
+  let seconds = record.original_clock_in_at ? (record.original_total_break_seconds || 0) : (record.total_break_seconds || 0)
+  if (record.break_started_at) {
+    const start = new Date(record.break_started_at).getTime()
+    if (now.getTime() > start) seconds += Math.floor((now.getTime() - start) / 1000)
+  }
+  return Math.max(0, Math.floor(seconds / 60))
+}
+
+export function calculateOriginalWorkMinutes(record: AttendanceRecord, now: Date = new Date()): number {
+  const startValue = record.original_clock_in_at ?? record.clock_in_at
+  if (!startValue) return 0
+  const start = new Date(startValue).getTime()
+  const endValue = record.original_clock_in_at ? record.original_clock_out_at : record.clock_out_at
+  const end = endValue
+    ? new Date(endValue).getTime()
+    : (record.break_started_at ? new Date(record.break_started_at).getTime() : now.getTime())
+  if (end <= start) return 0
+  const grossMinutes = Math.floor((end - start) / (60 * 1000))
+  const breakMinutes = record.break_started_at
+    ? Math.floor((record.original_clock_in_at ? (record.original_total_break_seconds || 0) : (record.total_break_seconds || 0)) / 60)
+    : calculateOriginalBreakMinutes(record, now)
+  return Math.max(0, grossMinutes - breakMinutes)
+}
+
 export function formatDuration(minutes: number | null | undefined): string {
   if (minutes === null || minutes === undefined) return '—'
   const h = Math.floor(minutes / 60)

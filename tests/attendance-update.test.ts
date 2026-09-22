@@ -58,7 +58,7 @@ test('unchanged active punch break remains in accumulation mode when edited', as
   } finally { sqlite.close() }
 })
 
-test('manual clock-out finalizes an active punch break', async () => {
+test('monthly clock-out edit does not finalize or mutate an active original punch break', async () => {
   const sqlite = new DatabaseSync(':memory:')
   try {
     sqlite.exec(readFileSync(new URL('../db/schema.sql', import.meta.url), 'utf8'))
@@ -66,16 +66,38 @@ test('manual clock-out finalizes an active punch break', async () => {
       sqlite.exec(readFileSync(new URL(`../migrations/${file}`, import.meta.url), 'utf8'))
     }
     sqlite.exec(`INSERT INTO users (id,employee_code,display_name) VALUES ('u2','u2','U2');
-      INSERT INTO attendance_records (id,user_id,work_date,clock_in_at,break_started_at)
-      VALUES ('active-break','u2','2026-09-19','2026-09-19T00:00:00.000Z','2026-09-19T01:00:00.000Z')`)
+      INSERT INTO attendance_records (id,user_id,work_date,clock_in_at,original_clock_in_at,break_started_at,total_break_seconds,original_total_break_seconds)
+      VALUES ('active-break','u2','2026-09-19','2026-09-19T00:00:00.000Z','2026-09-19T00:00:00.000Z','2026-09-19T01:00:00.000Z',120,300)`)
     const record = sqlite.prepare('SELECT * FROM attendance_records WHERE id=?').get('active-break')
     const binding = { prepare: (sql: string) => ({ bind: (...values: any[]) => ({ run: async () => ({ meta: { changes: sqlite.prepare(sql).run(...values).changes } }) }) }) }
     const save = new Function('db', 'isoNow', 'createError', `${script}\nreturn saveAttendanceTimes`)(
       () => binding, () => '2026-09-19T02:00:00.000Z', (options: any) => Object.assign(new Error(options.statusMessage), options))
     await save({}, 'u2', record, record.clock_in_at, '2026-09-19T02:00:00.000Z')
     const after = sqlite.prepare('SELECT * FROM attendance_records WHERE id=?').get('active-break') as any
+    assert.equal(after.break_started_at, '2026-09-19T01:00:00.000Z')
+    assert.equal(after.clock_out_at, '2026-09-19T02:00:00.000Z')
+    assert.equal(after.total_break_seconds, 120)
+    assert.equal(after.original_total_break_seconds, 300)
+  } finally { sqlite.close() }
+})
+
+test('monthly clock-out edit still finalizes an active break on legacy records', async () => {
+  const sqlite = new DatabaseSync(':memory:')
+  try {
+    sqlite.exec(readFileSync(new URL('../db/schema.sql', import.meta.url), 'utf8'))
+    for (const file of readdirSync(new URL('../migrations/', import.meta.url)).filter(name => name.endsWith('.sql')).sort()) {
+      sqlite.exec(readFileSync(new URL(`../migrations/${file}`, import.meta.url), 'utf8'))
+    }
+    sqlite.exec(`INSERT INTO users (id,employee_code,display_name) VALUES ('u3','u3','U3');
+      INSERT INTO attendance_records (id,user_id,work_date,clock_in_at,break_started_at,total_break_seconds)
+      VALUES ('legacy-break','u3','2026-09-19','2026-09-19T00:00:00.000Z','2026-09-19T01:00:00.000Z',120)`)
+    const record = sqlite.prepare('SELECT * FROM attendance_records WHERE id=?').get('legacy-break')
+    const binding = { prepare: (sql: string) => ({ bind: (...values: any[]) => ({ run: async () => ({ meta: { changes: sqlite.prepare(sql).run(...values).changes } }) }) }) }
+    const save = new Function('db', 'isoNow', 'createError', `${script}\nreturn saveAttendanceTimes`)(
+      () => binding, () => '2026-09-19T02:00:00.000Z', (options: any) => Object.assign(new Error(options.statusMessage), options))
+    await save({}, 'u3', record, record.clock_in_at, '2026-09-19T02:00:00.000Z')
+    const after = sqlite.prepare('SELECT * FROM attendance_records WHERE id=?').get('legacy-break') as any
     assert.equal(after.break_started_at, null)
-    assert.equal(after.total_break_seconds, 3600)
-    assert.equal(after.original_total_break_seconds, 3600)
+    assert.equal(after.total_break_seconds, 3720)
   } finally { sqlite.close() }
 })
