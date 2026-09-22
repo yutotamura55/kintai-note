@@ -13,6 +13,8 @@
 ## Branching policy
 
 - Create a dedicated branch for each Issue or other independently reviewable change.
+- Before creating a new Issue branch, fetch the latest `main` and use `origin/main` as the branch base.
+- Do not create a new Issue branch from another feature branch or from a stale local `main`.
 - Keep a branch focused on one Issue; do not mix unrelated fixes or features into it.
 - Include the Issue number and a short purpose in the branch name, using one of these prefixes:
   - `feat/<issue-number>-<short-purpose>` for new functionality.
