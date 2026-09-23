@@ -1,0 +1,15 @@
+{
+  "name": "Kintai Note",
+  "dockerComposeFile": "../compose.yaml",
+  "service": "app",
+  "workspaceFolder": "/workspace",
+  "remoteUser": "node",
+  "updateRemoteUserUID": true,
+  "forwardPorts": [3000],
+  "postCreateCommand": "npm ci",
+  "customizations": {
+    "vscode": {
+      "extensions": ["Vue.volar"]
+    }
+  }
+}
