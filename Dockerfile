@@ -1,8 +1,8 @@
 FROM node:22-bookworm-slim
 
 WORKDIR /workspace
-RUN mkdir -p /workspace/node_modules \
-    && chown node:node /workspace /workspace/node_modules
+RUN mkdir -p /workspace/node_modules /workspace/.nuxt \
+    && chown node:node /workspace /workspace/node_modules /workspace/.nuxt
 
 COPY --chown=node:node . .
 

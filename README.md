@@ -15,7 +15,7 @@ Docker Desktop、WSL 連携、VS Code の Dev Containers 拡張機能を用意�
 3. `.dev.vars.example` を `.dev.vars` として複製し、初期管理者作成用トークンを設定。
 4. `npm run dev -- --host 0.0.0.0` で起動し、`/setup` で最初の管理者を作成します。管理者作成後は `BOOTSTRAP_TOKEN` を削除してください。
 
-VS Code のターミナルと開発プロセスは `node` ユーザーで動きます。ソースコードと `.wrangler/state` はWSL内のプロジェクトフォルダに保存されます。ローカルD1のデータもこのフォルダに残り、コンテナを作り直しても保持されます。`.wrangler/` はGit管理対象外です。
+VS Code のターミナルと開発プロセスは `node` ユーザーで動きます。ソースコードと `.wrangler/state` はWSL内のプロジェクトフォルダに保存されます。ローカルD1のデータもこのフォルダに残り、コンテナを作り直しても保持されます。依存パッケージとNuxtの生成キャッシュはDockerの専用ボリュームに保存し、ホスト側のファイルと混在させません。`.wrangler/` はGit管理対象外です。
 
 `package-lock.json` を更新したら、コンテナ内ターミナルで `npm ci` を実行して依存パッケージを更新してください。単体テストもコンテナ内で実行します。
 
