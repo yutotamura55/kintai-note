@@ -4,33 +4,36 @@
 
 ## セットアップ
 
+### VS Code Dev Container
+
+Docker Desktop、WSL 連携、VS Code の Dev Containers 拡張機能を用意します。WSL 内でプロジェクトを開き、VS Code のコマンドパレットから `Dev Containers: Reopen in Container` を実行してください。初回のコンテナ作成時に `npm ci` が実行されます。ホストにNode.jsやnpmをインストールする必要はありません。
+
+コンテナ内で次のセットアップを行います。
+
+1. Cloudflare に D1 データベースを作成し、その ID を `wrangler.jsonc` の `database_id` に設定。
+2. `npm run db:local:apply` でローカル DB の初期スキーマとマイグレーションを適用。
+3. `.dev.vars.example` を `.dev.vars` として複製し、初期管理者作成用トークンを設定。
+4. `npm run dev -- --host 0.0.0.0` で起動し、`/setup` で最初の管理者を作成します。管理者作成後は `BOOTSTRAP_TOKEN` を削除してください。
+
+VS Code のターミナルと開発プロセスは `node` ユーザーで動きます。ソースコードと `.wrangler/state` はWSL内のプロジェクトフォルダに保存されます。ローカルD1のデータもこのフォルダに残り、コンテナを作り直しても保持されます。`.wrangler/` はGit管理対象外です。
+
+`package-lock.json` を更新したら、コンテナ内ターミナルで `npm ci` を実行して依存パッケージを更新してください。単体テストもコンテナ内で実行します。
+
+```bash
+npm run test:unit
+```
+
+開発サーバーは `http://localhost:3000` で開きます。終了するときは `Ctrl+C` を押してください。コンテナも停止する場合は、WSLのプロジェクトフォルダで `docker compose down` を実行します。
+
+`.dev.vars` を使う場合はプロジェクトのルートに作成してください。VS Codeから接続したコンテナ内で利用できますが、`.dev.vars` や `.env` はイメージへコピーされません。Dev Container は開発専用であり、本番の Worker と D1 は従来どおり Wrangler と GitHub Actions からデプロイします。
+
+### ホストで直接開発する場合
+
 1. Node.js 22 以上を用意して `npm install`。
 2. Cloudflare に D1 データベースを作成し、その ID を `wrangler.jsonc` の `database_id` に設定。
 3. `npm run db:local:apply` でローカル DB の初期スキーマとマイグレーションを適用。
 4. `.dev.vars.example` を `.dev.vars` として複製し、初期管理者作成用トークンを設定。
 5. `npm run dev` で起動し、`/setup` で最初の管理者を作成します。管理者作成後は `BOOTSTRAP_TOKEN` を削除してください。
-
-### Docker での開発
-
-Docker と Docker Compose があれば、Node.js のバージョンや npm の依存関係をホストへインストールせずに開発できます。
-
-```bash
-docker compose up --build
-```
-
-ブラウザで `http://localhost:3000` を開きます。ソースコードはコンテナへマウントされるため、編集内容は自動的に反映されます。終了するときは `Ctrl+C` を押すか、別のターミナルで次を実行します。
-
-```bash
-docker compose down
-```
-
-単体テストは次のコマンドで実行できます。
-
-```bash
-docker compose run --rm app npm run test:unit
-```
-
-`.dev.vars` を使う場合は、リポジトリのホスト側に作成してください。`.dev.vars` や `.env` はイメージへコピーされません。Compose の設定は開発用であり、本番の Worker と D1 は従来どおり Wrangler と GitHub Actions からデプロイします。
 
 ## ローカル検証
 

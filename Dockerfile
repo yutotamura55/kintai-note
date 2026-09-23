@@ -1,13 +1,13 @@
 FROM node:22-bookworm-slim
 
-WORKDIR /app
+WORKDIR /workspace
+RUN mkdir -p /workspace/node_modules \
+    && chown node:node /workspace /workspace/node_modules
 
-COPY package.json package-lock.json ./
-RUN npm ci
-
-COPY . .
+COPY --chown=node:node . .
 
 ENV NODE_ENV=development
 EXPOSE 3000
 
-CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+USER node
+CMD ["sleep", "infinity"]
