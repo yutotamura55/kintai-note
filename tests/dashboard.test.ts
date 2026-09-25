@@ -63,7 +63,7 @@ test('unauthorized initial load redirects to login', async () => {
   await page(async () => { throw { statusCode: 401 } }, undefined, async (path: string) => { destination = path })
   assert.equal(destination, '/login')
 })
-test('clock buttons are disabled while a refresh is in flight', async () => {
+test('clock buttons stay enabled while a return refresh is in flight', async () => {
   let pending: Promise<void> | undefined
   const view = await page(async (path: string) => { await pending; return success(path) })
   let release!: () => void
@@ -72,8 +72,54 @@ test('clock buttons are disabled while a refresh is in flight', async () => {
   try {
     const html = await view.html()
     assert.match(html, /<button[^>]*disabled[^>]*>出勤を記録/)
-    assert.match(html, /<button[^>]*disabled[^>]*>退勤を記録/)
+    assert.doesNotMatch(html, /<button[^>]*disabled[^>]*>休憩開始を記録/)
+    assert.doesNotMatch(html, /<button[^>]*disabled[^>]*>退勤を記録/)
   } finally { release(); await refresh }
+})
+
+test('a clock during return refresh waits for it and reloads the committed state', async () => {
+  const lifecycle: Record<string, any> = {}
+  let release!: () => void
+  let pending = false
+  let onBreak = false
+  let posts = 0
+  let attendanceRequests = 0
+  const view = await page(async (path: string) => {
+    if (path === '/api/auth/me') return { display_name: 'Test', role: 'member' }
+    attendanceRequests++
+    const result = { ...today, openRecord: { ...today.openRecord, break_started_at: onBreak ? '2026-09-18T01:00:00.000Z' : null } }
+    if (pending) await new Promise<void>(resolve => { release = resolve })
+    return result
+  }, async () => { posts++; onBreak = true; return {} }, undefined, lifecycle)
+  lifecycle.mounted()
+  pending = true
+  lifecycle['window:focus']()
+  assert.equal(view.state.loading, true)
+  const clock = view.state.clock('break_start')
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(posts, 0)
+  pending = false
+  release()
+  await clock
+  assert.equal(posts, 1)
+  assert.equal(attendanceRequests, 3)
+  assert.equal(view.state.currentState, 'on_break')
+})
+
+test('rapid repeated clicks submit only one clock request', async () => {
+  let release!: () => void
+  let posts = 0
+  const view = await page(success, async () => {
+    posts++
+    await new Promise<void>(resolve => { release = resolve })
+    return {}
+  })
+  const first = view.state.clock('break_start')
+  const second = view.state.clock('break_start')
+  assert.equal(posts, 1)
+  release()
+  await Promise.all([first, second])
+  assert.equal(posts, 1)
 })
 
 test('dashboard displays original break and work durations without polling the API', async () => {
