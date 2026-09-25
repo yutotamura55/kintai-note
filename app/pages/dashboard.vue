@@ -4,6 +4,7 @@ const router = useRouter(); const today = ref<any>(); const me = ref<any>(); con
 const loadError = ref(''); const loading = ref(false)
 const liveNow = ref(new Date())
 let durationTimer: ReturnType<typeof setInterval> | undefined
+let loadPromise: Promise<void> | undefined
 const api = useRequestFetch()
 const displayedRecord = computed(() => today.value?.openRecord || today.value?.record)
 const punchRecord = computed(() => {
@@ -30,21 +31,26 @@ const statusInfo = computed(() => {
   return { label: '勤務中', class: 'status-working' }
 })
 async function load() {
-  if (loading.value) return
+  if (loadPromise) return loadPromise
   loading.value = true
-  try {
-    [me.value, today.value] = await Promise.all([api('/api/auth/me'), api('/api/attendance/today')])
-    loadError.value = ''
-  }
-  catch (cause: any) {
-    if (cause?.statusCode === 401 || cause?.response?.status === 401) await router.replace('/login')
-    else loadError.value = '記録を取得できませんでした。再試行してください。'
-  }
-  finally { loading.value = false }
+  loadPromise = (async () => {
+    try {
+      [me.value, today.value] = await Promise.all([api('/api/auth/me'), api('/api/attendance/today')])
+      loadError.value = ''
+    }
+    catch (cause: any) {
+      if (cause?.statusCode === 401 || cause?.response?.status === 401) await router.replace('/login')
+      else loadError.value = '記録を取得できませんでした。再試行してください。'
+    }
+    finally { loading.value = false; loadPromise = undefined }
+  })()
+  return loadPromise
 }
 async function clock(action: 'in' | 'out' | 'break_start' | 'break_end') {
+  if (busy.value) return
   busy.value = true; error.value = '';
   try {
+    if (loading.value) await load()
     const targetRecordId = today.value?.openRecord?.id || today.value?.record?.id
     await $fetch('/api/attendance/clock', {
       method: 'POST',
@@ -110,9 +116,9 @@ onUnmounted(() => {
           </div>
         </div>
         <div class="actions">
-          <button class="clock-action primary" :disabled="busy || loading || !canPerform(currentState, 'in')" @click="clock('in')" aria-label="出勤を記録" data-icon="▶">出勤を記録</button>
-          <button class="clock-action break-action" :disabled="busy || loading || !canPerform(currentState, isOnBreak ? 'break_end' : 'break_start')" @click="clock(isOnBreak ? 'break_end' : 'break_start')" :aria-label="isOnBreak ? '休憩終了を記録' : '休憩開始を記録'" :data-icon="isOnBreak ? '⏸' : '⏱'">{{ isOnBreak ? '休憩終了を記録' : '休憩開始を記録' }}</button>
-          <button class="clock-action danger" :disabled="busy || loading || !canPerform(currentState, 'out')" @click="clock('out')" aria-label="退勤を記録" data-icon="■">退勤を記録</button>
+          <button class="clock-action primary" :disabled="busy || !canPerform(currentState, 'in')" @click="clock('in')" aria-label="出勤を記録" data-icon="▶">出勤を記録</button>
+          <button class="clock-action break-action" :disabled="busy || !canPerform(currentState, isOnBreak ? 'break_end' : 'break_start')" @click="clock(isOnBreak ? 'break_end' : 'break_start')" :aria-label="isOnBreak ? '休憩終了を記録' : '休憩開始を記録'" :data-icon="isOnBreak ? '⏸' : '⏱'">{{ isOnBreak ? '休憩終了を記録' : '休憩開始を記録' }}</button>
+          <button class="clock-action danger" :disabled="busy || !canPerform(currentState, 'out')" @click="clock('out')" aria-label="退勤を記録" data-icon="■">退勤を記録</button>
         </div>
         <p v-if="isOnBreak" class="action-hint" role="status">休憩中は「休憩終了」を押して勤務を再開してください。</p>
         <p v-else-if="currentState === 'idle'" class="action-hint" role="status">出勤を記録してから休憩・退勤の操作が可能です。</p>
