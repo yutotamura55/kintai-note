@@ -12,7 +12,10 @@
 
 ## GitHub側の設定
 
-リポジトリを作成後、Settings → Environmentsで `production` を作り、デプロイ可能なブランチをmainに制限します。
+Settings → Environments → `production` の Deployment branches and tags は、カスタムの許可対象を `main` だけに設定しています。
+別のブランチから `production` へのデプロイは許可しません。
+環境を再作成する場合も、デプロイを有効にする前にこの設定を適用してください。
+GitHub APIでは `deployment_branch_policy.custom_branch_policies=true` と、許可パターン `main` を確認できます。
 
 production environmentに次を登録します。
 
@@ -23,7 +26,10 @@ production environmentに次を登録します。
 
 Settings → Secrets and variables → Actions → Variablesに `PRODUCTION_DEPLOY_ENABLED=true` を登録すると自動デプロイが有効になります。トークン値をGitに保存しないでください。BOOTSTRAP_TOKENはCIでは不要です。
 
-mainへの直接pushもデプロイ条件です。PR経由に限定したい場合は、GitHubのブランチ保護でPRを必須にし、`Local integration tests` と `Terraform validation` を必須チェックにします。利用できる保護設定はGitHubのプランによります。
+`main` には有効な `main-pr-and-ci` ruleset を設定し、PRと `Local integration tests`・`Terraform validation` の成功を必須にしています。
+旧Branch protection画面にルールがなくても、このrulesetが適用されます。
+PRを手動でマージすると `main` へのpushで検証が始まり、成功後に `production` へ自動デプロイします。
+`production` に追加の承認者は設定していません。
 
 ## Terraformの自動適用について
 
