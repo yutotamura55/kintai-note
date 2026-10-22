@@ -13,8 +13,19 @@
 
 これらはローカルD1・Workerと単体テストで確認したコード上の変更です。
 本番Workerへの反映と、本番応答にヘッダーが付くことはPRのマージ・デプロイ後に確認します。
-CloudflareのWAF・Rate Limiting設定、`BOOTSTRAP_TOKEN`の削除、APIトークンの権限、D1の復旧手順は、このレビュー時点では未確認です。
+2026-10-23にWranglerで本番Workerの現行バージョンを確認しました。bindingは`ASSETS`と`DB`のみで、`wrangler secret list`も空です。`BOOTSTRAP_TOKEN`と`RP_ID`は登録されていません。D1にはユーザーが2件あり、`RP_ID`はリクエスト先のホスト名から決まる実装です。
+D1は`production`ストレージで、Time Travelの現在・過去日時のブックマーク取得に成功しました。復旧操作そのものは本番データを上書きするため実行していません。CloudflareのWAF・Rate Limiting設定、デプロイ用APIトークンの実際の権限と対象範囲、Workers利用制限は未確認です。
 アプリ内の接続元別制限だけでは、接続元を分散した大量の要求を抑えられません。
+
+### 本番D1の復旧手順
+
+誤更新が起きた場合は、まず新たな書き込みを遮断し、事故直前の日時と復旧で失われる更新範囲を確認します。このアプリには書き込みを止める専用機能がなく、公開経路の遮断方法も未整備です。Cloudflare Workers & Pagesの`kintai-note`の「Settings → Domains & Routes」で全公開経路を確認し、それぞれを遮断する運用を決めるまでは、本番復旧を実行しないでください。`workers.dev`だけを停止しても、カスタムドメインなど別の経路は残り得ます。
+
+復旧先のブックマークは`npx wrangler d1 time-travel info kintai-note --timestamp="2026-10-20T00:00:00Z" --json`で取得します。この日時は形式例なので、実際の事故直前のUTC日時に置き換えます。JSONの`bookmark`値を記録します。実行直前には`npx wrangler d1 time-travel info kintai-note --json`で現在の`bookmark`値も記録します。
+
+現在の状態も別に保存する場合は、`npx wrangler d1 export kintai-note --remote --output=<リポジトリ外の保存先>.sql`を実行します。SQLファイルには個人情報が含まれるため、保存先のアクセス権を制限します。
+
+復旧を決めた場合に限り、`npx wrangler d1 time-travel restore kintai-note --bookmark=<復旧先のブックマーク>`を実行します。山括弧内は取得した値に置き換え、確認したブックマークを使用します。この操作は本番DBを指定時点の状態で上書きします。復旧後にユーザー数と主要な勤怠記録を確認してから書き込みを再開します。Time Travelの保持期間はWorkers Freeで7日、Paidで30日です。現在の契約プランは未確認なので、復旧可能期間は事前に確認してください。[Cloudflare D1 Time Travel](https://developers.cloudflare.com/d1/reference/time-travel/)
 
 ## 結論
 
