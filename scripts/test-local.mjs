@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process'
 import { once } from 'node:events'
 import { testOriginalTimes } from './test-original-times.mjs'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
+import { createHash } from 'node:crypto'
 
 const cwd = process.cwd()
 const wrangler = new URL('../node_modules/wrangler/bin/wrangler.js', import.meta.url).pathname
@@ -127,6 +128,9 @@ try {
   const old = await (await request('/api/attendance/today')).json()
   assert(old.openRecord?.id === record.id && old.openRecord.work_date === '2000-12-31', 'Previous unfinished shift not exposed on dashboard.')
   const dashboard = await request('/dashboard')
+  assert(dashboard.headers.get('x-frame-options') === 'DENY', 'Dashboard can be framed by another site.')
+  assert(dashboard.headers.get('content-security-policy')?.includes("frame-ancestors 'none'"), 'Dashboard lacks a frame-ancestors policy.')
+  assert(dashboard.headers.get('referrer-policy') === 'no-referrer', 'Invitation URLs may leak through referrers.')
   const dashboardHtml = await dashboard.text()
   assert(dashboard.status === 200 && dashboardHtml.includes('前回の勤務が未退勤です') && dashboardHtml.includes('month=2000-12'), 'Dashboard must render unfinished notice and link to its month.')
   const correctionPage = await request(`/records?month=2000-12&edit=${record.id}`)
@@ -180,6 +184,34 @@ try {
     assert((await clock('out', 'local-test-oldest-b')).status === 200, 'Next legacy shift must close after the oldest.')
     await run(process.execPath, [wrangler, 'd1', 'execute', 'kintai-note', '--local', '--command',
       "DELETE FROM attendance_records WHERE user_id='local-test-attendance-user' AND id IN ('local-test-oldest-a','local-test-oldest-b')"])
+  }
+  const logout = await request('/api/auth/logout', { method: 'POST' })
+  assert(logout.status === 200, 'Logout failed.')
+  const reusedSession = await request('/api/auth/me')
+  assert(reusedSession.status === 401, 'A copied session cookie remained valid after logout.')
+  const testVisitor = '203.0.113.42'
+  const rateKey = createHash('sha256').update(`login:${testVisitor}`).digest('hex')
+  const verifyRateKey = createHash('sha256').update(`verification:${testVisitor}`).digest('hex')
+  try {
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const options = await request('/api/auth/passkeys/login-options', { method: 'POST', headers: { 'cf-connecting-ip': testVisitor } })
+      assert(options.status === 200, `Login options attempt ${attempt + 1} failed unexpectedly.`)
+    }
+    const excessOptions = await request('/api/auth/passkeys/login-options', { method: 'POST', headers: { 'cf-connecting-ip': testVisitor } })
+    assert(excessOptions.status === 429, 'Excess login option requests must be rate limited.')
+    for (let attempt = 0; attempt < 20; attempt++) {
+      const invalidVerification = await request('/api/auth/passkeys/login-verify', {
+        method: 'POST', headers: { 'cf-connecting-ip': testVisitor }, body: '{}',
+      })
+      assert(invalidVerification.status === 400, `Invalid verification attempt ${attempt + 1} had an unexpected status.`)
+    }
+    const excessVerification = await request('/api/auth/passkeys/login-verify', {
+      method: 'POST', headers: { 'cf-connecting-ip': testVisitor }, body: '{}',
+    })
+    assert(excessVerification.status === 429, 'Excess passkey verification requests must be rate limited.')
+  } finally {
+    await run(process.execPath, [wrangler, 'd1', 'execute', 'kintai-note', '--local', '--command',
+      `DELETE FROM auth_rate_limits WHERE key IN ('${rateKey}', '${verifyRateKey}')`])
   }
   console.log('PASS: unit boundaries, attendance edits, overnight/legacy shifts, unfinished guards, concurrent clock-in, monthly PDF and authentication.')
 } finally {

@@ -1,8 +1,11 @@
 import { db, id } from '~~/server/utils/db'
+import { createInitialAdmin } from '~~/server/utils/auth-storage'
+import { requireAuthAttempt } from '~~/server/utils/auth'
 import { registrationOptions } from '~~/server/utils/webauthn'
 
 // This endpoint only works while there are no users, and requires BOOTSTRAP_TOKEN.
 export default defineEventHandler(async (event) => {
+  await requireAuthAttempt(event, 'bootstrap')
   const envToken = event.context.cloudflare?.env?.BOOTSTRAP_TOKEN as string | undefined
   const body = await readBody<{ token: string; employeeCode: string; displayName: string }>(event)
   if (!envToken || !body?.token || body.token !== envToken) throw createError({ statusCode: 403, statusMessage: 'セットアップを許可できません。' })
@@ -22,6 +25,7 @@ export default defineEventHandler(async (event) => {
   if (users.results.length > 0) throw createError({ statusCode: 409, statusMessage: '初期セットアップは完了済みです。' })
 
   const user = { id: id(), employee_code: body.employeeCode.trim(), display_name: body.displayName.trim() }
-  await db(event).prepare("INSERT INTO users (id, employee_code, display_name, role, status) VALUES (?, ?, ?, 'admin', 'active')").bind(user.id, user.employee_code, user.display_name).run()
+  const created = await createInitialAdmin(db(event), user.id, user.employee_code, user.display_name)
+  if (!created) throw createError({ statusCode: 409, statusMessage: '初期セットアップは完了済みです。' })
   return registrationOptions(event, user)
 })
