@@ -1,5 +1,6 @@
 import type { H3Event } from 'h3'
 import { db, fromBase64URL, id, isoNow, plusMinutes, toBase64URL } from './db'
+import { completeInvitation } from './invitation'
 
 // @peculiar/x509 (used by SimpleWebAuthn when verifying attestations) requires
 // Reflect metadata. Load it before dynamically loading SimpleWebAuthn so the
@@ -65,14 +66,30 @@ export async function registrationOptions(event: H3Event, user: { id: string; em
   return options
 }
 
-export async function verifyRegistration(event: H3Event, response: any) {
+export async function verifyRegistration(event: H3Event, response: any, flow: 'invitation' | 'account') {
   const { verifyRegistrationResponse } = await webauthn()
   const challenge = await consumeChallenge(event, 'register')
+  if ((flow === 'invitation' && !challenge.invitation_id) || (flow === 'account' && challenge.invitation_id)) {
+    throw createError({ statusCode: 400, statusMessage: '登録手順が一致しません。' })
+  }
   const verification = await verifyRegistrationResponse({ response, expectedChallenge: challenge.challenge, expectedOrigin: config(event).origin, expectedRPID: config(event).rpID, requireUserVerification: true })
   if (!verification.verified || !verification.registrationInfo) throw createError({ statusCode: 400, statusMessage: 'パスキーを登録できませんでした。' })
   const credential = verification.registrationInfo.credential
-  await db(event).prepare(`INSERT INTO passkeys (id, user_id, credential_id, public_key, counter, transports, device_type, backed_up)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
-    .bind(id(), challenge.user_id, credential.id, toBase64URL(credential.publicKey), credential.counter, JSON.stringify(credential.transports ?? []), verification.registrationInfo.credentialDeviceType, verification.registrationInfo.credentialBackedUp ? 1 : 0).run()
-  return { userId: challenge.user_id as string, invitationId: challenge.invitation_id as string | null }
+  const passkey = {
+    passkeyId: id(), userId: challenge.user_id as string, credentialId: credential.id,
+    publicKey: toBase64URL(credential.publicKey), counter: credential.counter,
+    transports: JSON.stringify(credential.transports ?? []),
+    deviceType: verification.registrationInfo.credentialDeviceType,
+    backedUp: verification.registrationInfo.credentialBackedUp ? 1 : 0,
+  }
+  if (flow === 'invitation') {
+    const completed = await completeInvitation(db(event), { ...passkey, invitationId: challenge.invitation_id as string, now: isoNow() })
+    if (!completed) throw createError({ statusCode: 409, statusMessage: '招待URLが無効、使用済み、または期限切れです。' })
+  } else {
+    await db(event).prepare(`INSERT INTO passkeys (id, user_id, credential_id, public_key, counter, transports, device_type, backed_up)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+      .bind(passkey.passkeyId, passkey.userId, passkey.credentialId, passkey.publicKey, passkey.counter,
+        passkey.transports, passkey.deviceType, passkey.backedUp).run()
+  }
+  return { userId: passkey.userId }
 }
