@@ -1,29 +1,29 @@
 import { spawn } from 'node:child_process'
 import { once } from 'node:events'
-import { rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import assert from 'node:assert/strict'
 
 // Passkey success paths through the real pages: first administrator setup, invitation,
 // login, adding a passkey and the guards around them. A virtual authenticator in headless
 // Chromium answers WebAuthn. The Worker uses its own empty D1 directory, because setup
 // only works while no user exists and must not touch the developer's local data.
+// Each run gets its own directory under .wrangler/ so concurrent runs cannot delete each other's data.
 const port = 8789
 const baseUrl = `http://localhost:${port}`
-const persistTo = '.wrangler/test-passkey-flow'
 const bootstrapToken = 'local-test-passkey-bootstrap-token'
 
 async function respondsOk() {
   try { return (await fetch(`${baseUrl}/`, { signal: AbortSignal.timeout(1000) })).ok } catch { return false }
 }
 
-async function startWorker({ cwd, wrangler }) {
+async function startWorker({ cwd, wrangler, persistTo }) {
   // Never run the test against another server that already listens on this port.
   if (await respondsOk()) throw new Error(`Port ${port} is already in use; stop that server before running the passkey test.`)
   const worker = spawn(process.execPath, [wrangler, 'dev', '--local', '--port', String(port), '--persist-to', persistTo,
     '--var', `BOOTSTRAP_TOKEN:${bootstrapToken}`, '--var', 'RP_ID:localhost'],
   { cwd, stdio: 'inherit', detached: process.platform !== 'win32' })
   const deadline = Date.now() + 30_000
-  while (Date.now() < deadline && worker.exitCode === null) {
+  while (Date.now() < deadline && !exited(worker)) {
     if (await respondsOk()) return worker
     await new Promise(resolve => setTimeout(resolve, 250))
   }
@@ -32,10 +32,14 @@ async function startWorker({ cwd, wrangler }) {
   throw new Error('Passkey test Worker did not start within 30 seconds.')
 }
 
+const exited = worker => worker.exitCode !== null || worker.signalCode !== null
+
 async function stopWorker(worker) {
-  if (!worker?.pid || worker.exitCode !== null) return
+  if (!worker?.pid || exited(worker)) return
   const stopped = once(worker, 'exit')
-  const signal = name => process.platform === 'win32' ? worker.kill(name) : process.kill(-worker.pid, name)
+  const signal = name => {
+    try { process.platform === 'win32' ? worker.kill(name) : process.kill(-worker.pid, name) } catch {} // already gone
+  }
   signal('SIGTERM')
   // Escalate if Wrangler does not shut down, so cleanup cannot hang.
   const timer = setTimeout(() => signal('SIGKILL'), 10_000)
@@ -76,12 +80,13 @@ export async function testPasskeyFlow({ cwd, run, wrangler }) {
   const sql = command => run(process.execPath, [wrangler, 'd1', 'execute', 'kintai-note', '--local', '--persist-to', persistTo, '--json', '--command', command])
   const query = async command => JSON.parse(await sql(command))[0].results
 
-  await rm(persistTo, { recursive: true, force: true })
+  await mkdir('.wrangler', { recursive: true })
+  const persistTo = await mkdtemp('.wrangler/test-passkey-flow-')
   let worker; let browser
   try {
     await run(process.execPath, [wrangler, 'd1', 'execute', 'kintai-note', '--local', '--persist-to', persistTo, '--file', 'db/schema.sql'])
     await run(process.execPath, [wrangler, 'd1', 'migrations', 'apply', 'kintai-note', '--local', '--persist-to', persistTo])
-    worker = await startWorker({ cwd, wrangler })
+    worker = await startWorker({ cwd, wrangler, persistTo })
     browser = await chromium.launch()
 
     // First administrator: a wrong token is refused, the right one registers a passkey.
