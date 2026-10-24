@@ -1,6 +1,5 @@
 import type { H3Event } from 'h3'
 import { db, id, plusMinutes, sha256 } from './db'
-import { consumeAuthLimit } from './auth-storage'
 import { d1AuthRepository } from './auth-repository'
 import type { User } from './types'
 
@@ -25,7 +24,7 @@ export async function requireAuthAttempt(event: H3Event, action: 'login' | 'invi
   const visitor = getRequestHeader(event, 'cf-connecting-ip') || getRequestIP(event) || 'unknown'
   const now = new Date()
   const key = await sha256(`${action}:${visitor}`)
-  const allowed = await consumeAuthLimit(db(event), key, now.toISOString(), new Date(now.getTime() + 5 * 60_000).toISOString(), limits[action])
+  const allowed = await d1AuthRepository(db(event)).consumeAttempt(key, now.toISOString(), new Date(now.getTime() + 5 * 60_000).toISOString(), limits[action])
   if (!allowed) throw createError({ statusCode: 429, statusMessage: 'しばらく待ってから再試行してください。' })
 }
 
