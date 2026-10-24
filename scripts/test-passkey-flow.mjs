@@ -158,7 +158,7 @@ export async function testPasskeyFlow({ cwd, run, wrangler }) {
     await secondDevice.page.waitForURL('**/dashboard')
     assert.equal((await me(secondDevice.page)).id, employeeUser.id)
 
-    // Disabling a user ends the current session and blocks the passkey.
+    // A disabled user's session row remains, but every request with it is rejected, and the passkey no longer logs in.
     await sql(`UPDATE users SET status='disabled' WHERE id='${employeeUser.id}'`)
     assert.equal(await me(secondDevice.page), 401, "A disabled user's existing session must be rejected.")
     await secondDevice.page.goto('/login')
