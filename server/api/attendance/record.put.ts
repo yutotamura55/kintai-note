@@ -1,11 +1,17 @@
 import { currentUser } from '~~/server/utils/auth'
-import { ownedAttendance, resolveBreakMinutes, saveAttendanceTimes } from '~~/server/utils/attendance'
+import { db } from '~~/server/utils/db'
+import { editAttendanceTimes, findOwnedAttendance } from '~~/server/utils/attendance-edit'
+import { attendanceEditError } from '~~/server/utils/attendance-edit-errors'
+import { d1AttendanceRepository } from '~~/server/utils/attendance-repository'
 import { japanDateTime, parseJapanDateTime } from '~~/shared/utils/attendance'
 
 export default defineEventHandler(async (event) => {
   const user = await currentUser(event)
   const body = await readBody<{ id?: string, clockIn?: string | null, clockOut?: string | null, breakMinutes?: number | string | null }>(event)
-  const record = await ownedAttendance(event, user.id, body?.id)
+  const repository = d1AttendanceRepository(db(event))
+  const owned = await findOwnedAttendance(repository, user.id, body?.id)
+  if (!owned.ok) throw attendanceEditError(owned.reason)
+  const { record } = owned
 
   // Retain support for old, already-open clients sending HH:MM. Never infer "next day".
   const parse = (value: unknown, previous: string | null) => {
@@ -19,23 +25,9 @@ export default defineEventHandler(async (event) => {
   let clockInAt: string | null; let clockOutAt: string | null
   try { clockInAt = parse(body?.clockIn, record.clock_in_at); clockOutAt = parse(body?.clockOut, record.clock_out_at) }
   catch (cause) { throw createError({ statusCode: 400, statusMessage: cause instanceof Error ? cause.message : '正しい日時を入力してください。' }) }
-  if (record.break_started_at && clockOutAt && clockOutAt < record.break_started_at) {
-    throw createError({ statusCode: 400, statusMessage: '退勤時刻は休憩開始時刻より後にしてください。' })
-  }
-
-  let breakMinutes: number | null | undefined = undefined
-  if (body && 'breakMinutes' in body) {
-    if (body.breakMinutes === null || body.breakMinutes === '' || body.breakMinutes === undefined) {
-      breakMinutes = null
-    } else {
-      const parsed = Number(body.breakMinutes)
-      if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < 0) {
-        throw createError({ statusCode: 400, statusMessage: '休憩時間は0分以上の整数で入力してください。' })
-      }
-      breakMinutes = resolveBreakMinutes(record, parsed, clockOutAt)
-    }
-  }
-
-  await saveAttendanceTimes(event, user.id, record, clockInAt, clockOutAt, breakMinutes)
+  // A JSON body cannot hold undefined, so a present breakMinutes is passed as a value or null.
+  const requestedBreak = body && 'breakMinutes' in body ? body.breakMinutes ?? null : undefined
+  const result = await editAttendanceTimes(repository, user.id, record, clockInAt, clockOutAt, requestedBreak, new Date())
+  if (!result.ok) throw attendanceEditError(result.reason)
   return { ok: true }
 })
