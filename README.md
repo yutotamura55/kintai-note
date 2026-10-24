@@ -70,7 +70,16 @@ Chromium 本体は初回の実行時に `node_modules` 内へダウンロード�
 
 `npm run test:unit` では、日本時間の午前4時直前／ちょうど、月末・年末・うるう日、日時入力の検証と画面の操作テストを高速に実行できます。日時はテストに直接渡すため、PCの現在時刻・タイムゾーンに依存しません。本番APIにテスト用時刻の指定機能は追加していません。
 
-型の検査は `npm run typecheck` で実行します。画面・サーバー・共有コード・テストを `nuxt typecheck`（vue-tsc）で検査します。サーバー側の D1 などの型は、`wrangler types` が生成した `server/cloudflare-env.d.ts` から読み込みます。`wrangler.jsonc` の互換日付・フラグ・バインディングを変えたとき、または Wrangler を更新したときは、`npm run types:workers` でこのファイルを作り直してください。`wrangler.jsonc` を変えたまま作り直していないと、`npm run typecheck` が最初に失敗して知らせます。GitHub Actions でも同じ検査を実行します。
+型の検査は `npm run typecheck` で実行します。画面・サーバー・共有コード・テストを `nuxt typecheck`（vue-tsc）で検査します。GitHub Actions でも同じ検査を実行し、失敗すると本番デプロイは行われません。
+
+サーバー側の型は、`wrangler types` が生成した 2 つのファイルから読み込みます。どちらも手で編集しないでください。
+
+| ファイル | 内容 | 作り直すとき | 作り直す方法 |
+| --- | --- | --- | --- |
+| `server/worker-runtime.d.ts` | `D1Database` などの Workers の実行環境の型 | `wrangler.jsonc` の互換日付・互換フラグを変えたとき、Wrangler を更新したとき | `npm run types:workers` |
+| `server/cloudflare-env.d.ts` | `DB` などのバインディングを持つ `Env` の型 | `wrangler.jsonc` のバインディングを変えたとき | ファイルの 2 行目に書かれたコマンド（`wrangler types --include-runtime=false server/cloudflare-env.d.ts`） |
+
+`npm run typecheck` は最初に `server/worker-runtime.d.ts` が `wrangler.jsonc` の互換日付・フラグと合っているかを確かめ、合っていなければ失敗します。`server/cloudflare-env.d.ts` は、ビルドの成果物と `.dev.vars` の有無で生成結果が変わるため、この確認の対象にしていません。
 
 `--local` を明示しているため、Cloudflare上のWorker・D1・シークレットには接続しません。ローカルの実データは `.wrangler/` に保存され、Git管理対象外です。
 

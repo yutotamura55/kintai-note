@@ -11,8 +11,8 @@
     "db:local:seed": "wrangler d1 execute kintai-note --local --file=db/seed.local.sql",
     "db:local:cleanup": "wrangler d1 execute kintai-note --local --file=db/cleanup.local.sql",
     "test:unit": "node --experimental-strip-types --test tests/*.test.ts",
-    "typecheck": "wrangler types server/cloudflare-env.d.ts --check && nuxt typecheck",
-    "types:workers": "wrangler types server/cloudflare-env.d.ts",
+    "typecheck": "wrangler types server/worker-runtime.d.ts --include-env=false --check && nuxt typecheck",
+    "types:workers": "wrangler types server/worker-runtime.d.ts --include-env=false",
     "test:local": "node scripts/test-local.mjs",
     "db:local:apply": "wrangler d1 execute kintai-note --local --file=db/schema.sql && wrangler d1 migrations apply kintai-note --local"
   },
