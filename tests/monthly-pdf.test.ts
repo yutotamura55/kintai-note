@@ -31,7 +31,7 @@ async function report(displayName: string, records = rows, options = { cloudflar
   const handler = new Function(...Object.keys(dependencies), script)(...Object.values(dependencies))
   const event = { context: options.cloudflare ? { cloudflare: { env: { ASSETS: { fetch: asset } } } } : {} }
   const bytes = await handler(event)
-  const task = getDocument({ data: new Uint8Array(bytes), useSystemFonts: true, isEvalSupported: false })
+  const task = getDocument({ data: new Uint8Array(bytes), useSystemFonts: true })
   try {
     const pdf = await task.promise
     const page = await pdf.getPage(1)
@@ -77,11 +77,14 @@ test('embedded glyph outlines remain drawable after subsetting', async () => {
     if (!(object instanceof pdfLib.PDFDict)) continue
     const ref = object.get(pdfLib.PDFName.of('FontFile2'))
     if (!ref) continue
-    const stream = pdf.context.lookup(ref, pdfLib.PDFRawStream)
+    // pdf-lib types lookup() for PDFStream only; check the raw stream at runtime instead.
+    const stream = pdf.context.lookup(ref)
+    assert.ok(stream instanceof pdfLib.PDFRawStream, 'The embedded font must be a raw stream.')
     const font = fontkit.create(pdfLib.decodePDFRawStream(stream).decode())
     let empty = 0
     for (let id = 0; id < font.numGlyphs; id++) {
-      if (font.getGlyph(id).path.commands.length === 0) empty++
+      // fontkit's type definitions omit Path.commands, which the runtime object has.
+      if ((font.getGlyph(id).path as unknown as { commands: unknown[] }).commands.length === 0) empty++
     }
     // This title has exactly one unique whitespace glyph; every other glyph must draw.
     assert.equal(empty, 1, 'Text extraction alone can pass even when visible glyphs are corrupt.')

@@ -1,14 +1,13 @@
 <script setup lang="ts">
 import { workDateAt, japanDateTime, displayJapanDateTime, calculateBreakMinutes, calculateWorkMinutes, formatDuration, type AttendanceRecord } from '~~/shared/utils/attendance'
-type Record = AttendanceRecord
 const route = useRoute()
 const api = useRequestFetch()
 const requestedMonth = typeof route.query.month === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(route.query.month) ? route.query.month : null
-const month = ref(requestedMonth || workDateAt().slice(0, 7)); const records = ref<Record[]>([])
+const month = ref(requestedMonth || workDateAt().slice(0, 7)); const records = ref<AttendanceRecord[]>([])
 const editing = ref<string | null>(null); const draft = ref({ clockIn: '', clockOut: '', breakMinutes: 0 as number | string }); const saving = ref(false); const error = ref('')
 async function load() { const data = await api<any>('/api/attendance/month', { query: { month: month.value } }); records.value = data.results }
 function pdf() { window.open(`/api/reports/month.pdf?month=${month.value}`, '_blank') }
-function edit(record: Record) {
+function edit(record: AttendanceRecord) {
   error.value = ''; editing.value = record.id;
   draft.value = {
     clockIn: japanDateTime(record.clock_in_at),
@@ -19,7 +18,7 @@ function edit(record: Record) {
   }
 }
 function cancel() { editing.value = null; error.value = '' }
-async function save(record: Record) {
+async function save(record: AttendanceRecord) {
   saving.value = true; error.value = ''
   try {
     await $fetch('/api/attendance/record', {
@@ -36,12 +35,12 @@ async function save(record: Record) {
   catch (cause: any) { error.value = cause?.data?.statusMessage || '記録を更新できませんでした。' }
   finally { saving.value = false }
 }
-function canRestore(record: Record) {
+function canRestore(record: AttendanceRecord) {
   return !!((record.original_clock_in_at && record.original_clock_in_at !== record.clock_in_at)
     || (record.original_clock_out_at && record.original_clock_out_at !== record.clock_out_at)
     || (record.break_minutes !== null && record.break_minutes !== undefined))
 }
-function restoreTargetLabel(record: Record) {
+function restoreTargetLabel(record: AttendanceRecord) {
   const parts: string[] = []
   if (record.original_clock_in_at && record.original_clock_out_at) parts.push('出勤・退勤')
   else if (record.original_clock_in_at) parts.push('出勤のみ')
@@ -49,7 +48,7 @@ function restoreTargetLabel(record: Record) {
   if (record.break_minutes !== null && record.break_minutes !== undefined) parts.push('休憩')
   return parts.join('・')
 }
-async function restore(record: Record) {
+async function restore(record: AttendanceRecord) {
   if (saving.value) return
   saving.value = true; error.value = ''
   try {

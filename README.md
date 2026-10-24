@@ -70,6 +70,8 @@ Chromium 本体は初回の実行時に `node_modules` 内へダウンロード�
 
 `npm run test:unit` では、日本時間の午前4時直前／ちょうど、月末・年末・うるう日、日時入力の検証と画面の操作テストを高速に実行できます。日時はテストに直接渡すため、PCの現在時刻・タイムゾーンに依存しません。本番APIにテスト用時刻の指定機能は追加していません。
 
+型の検査は `npm run typecheck` で実行します。画面・サーバー・共有コード・テストを `nuxt typecheck`（vue-tsc）で検査します。サーバー側の D1 などの型は、`wrangler types` が生成した `server/cloudflare-env.d.ts` から読み込みます。`wrangler.jsonc` の互換日付・フラグ・バインディングを変えたとき、または Wrangler を更新したときは、`npm run types:workers` でこのファイルを作り直してください。`wrangler.jsonc` を変えたまま作り直していないと、`npm run typecheck` が最初に失敗して知らせます。GitHub Actions でも同じ検査を実行します。
+
 `--local` を明示しているため、Cloudflare上のWorker・D1・シークレットには接続しません。ローカルの実データは `.wrangler/` に保存され、Git管理対象外です。
 
 ## 本番デプロイ
