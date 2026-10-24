@@ -1,5 +1,5 @@
 import { db, id } from '~~/server/utils/db'
-import { createInitialAdmin } from '~~/server/utils/auth-storage'
+import { d1AuthRepository } from '~~/server/utils/auth-repository'
 import { requireAuthAttempt } from '~~/server/utils/auth'
 import { registrationOptions } from '~~/server/utils/webauthn'
 
@@ -11,21 +11,20 @@ export default defineEventHandler(async (event) => {
   if (!envToken || !body?.token || body.token !== envToken) throw createError({ statusCode: 403, statusMessage: 'セットアップを許可できません。' })
   if (!body.employeeCode?.trim() || !body.displayName?.trim()) throw createError({ statusCode: 400, statusMessage: '社員番号と表示名を入力してください。' })
 
-  const users = await db(event).prepare(`SELECT u.id, u.employee_code, u.display_name, u.role,
-    (SELECT COUNT(*) FROM passkeys p WHERE p.user_id = u.id) AS passkey_count
-    FROM users u`).all<{ id: string, employee_code: string, display_name: string, role: string, passkey_count: number }>()
-  const pendingAdmin = users.results.length === 1 && users.results[0].role === 'admin' && users.results[0].passkey_count === 0
-    ? users.results[0]
+  const repository = d1AuthRepository(db(event))
+  const users = await repository.listSetupUsers()
+  const pendingAdmin = users.length === 1 && users[0].role === 'admin' && users[0].passkey_count === 0
+    ? users[0]
     : undefined
 
   // A transient failure after creating the first administrator must not make
   // setup impossible to complete. This recovery still needs the bootstrap
   // token and applies only while that one admin has no passkey.
   if (pendingAdmin) return registrationOptions(event, pendingAdmin)
-  if (users.results.length > 0) throw createError({ statusCode: 409, statusMessage: '初期セットアップは完了済みです。' })
+  if (users.length > 0) throw createError({ statusCode: 409, statusMessage: '初期セットアップは完了済みです。' })
 
   const user = { id: id(), employee_code: body.employeeCode.trim(), display_name: body.displayName.trim() }
-  const created = await createInitialAdmin(db(event), user.id, user.employee_code, user.display_name)
+  const created = await repository.createInitialAdmin(user.id, user.employee_code, user.display_name)
   if (!created) throw createError({ statusCode: 409, statusMessage: '初期セットアップは完了済みです。' })
   return registrationOptions(event, user)
 })

@@ -93,6 +93,36 @@ AuthRepository のメソッドも一括実装しない。上の契約に含ま�
 
 Issue #11 はこの設計方針と検証条件の決定で完了する。段階 2〜4 の実装は Issue #4 で追跡し、各段階を独立した PR で検証する。まず段階 2 の打刻を対象とし、その結果から段階 3・4 を実施する価値を判断する。境界を増やしても読みやすさや変更容易性が改善しなければ、未実施の理由を Issue #4 に記録して移行を止める。別 DB への切替は Issue #4 に含めない。
 
+## 実施状況（2026-10-25）
+
+段階 2〜4 は Issue #4 の次の PR で実施した。どの PR も、移動前と同じ SQL・クエリ回数・HTTP 応答を保っている。
+
+| 段階 | PR | 移したもの |
+| --- | --- | --- |
+| 2. 打刻 | #36 | 出勤・休憩・退勤の条件付き書き込み（`AttendanceRepository.applyPunch`）と、打刻の手順（`attendance-punch.ts`） |
+| 3. 勤怠の編集・復元 | #37 | 出退勤時刻の保存（`AttendanceRepository.saveTimes`）と、編集・復元の手順（`attendance-edit.ts`） |
+| 4 の前提 | #38 | パスキーの登録・ログインが成功する経路の画面テスト（`scripts/test-passkey-flow.mjs`） |
+| 4. セッション | #39 | セッションの取得・作成・削除（`AuthRepository`） |
+| 4. challenge・試行制限 | #40 | challenge の保存・一度限りの消費、試行回数の更新 |
+| 4. 招待・パスキー | この節を追加した PR | パスキーの検索・使用記録・一覧・追加、招待の作成・検索・使用、初回管理者の作成と、その前の利用者一覧 |
+
+設計案から変えた点：
+
+- `findActiveSessionUser` は `findSessionUser` にした。利用者が `active` かどうかは、Repository ではなく `auth.ts` が判定するため。
+- `SaveTimesCommand` と `saveChallenge` には、`updated_at` や期限切れの判定に使う現在時刻を加えた。時刻は呼び出し側が決める。
+- 勤怠の失敗理由は、Application service がコードで返し、HTTP 層が既存の 400 / 404 / 409 と日本語メッセージに変換する（`clock.post.ts`、`attendance-edit-errors.ts`）。認証は手順と呼べる処理が少ないため、Application service を作らず、`auth.ts` と `webauthn.ts` が Cookie・時刻・WebAuthn の検証・HTTP エラーを受け持つ。
+
+`rg -n 'db\(event\)|\.prepare\(|\.batch\(|D1Database|\.env\.DB' server/api server/utils` で棚卸しすると、Repository の D1 実装（`attendance-repository.ts`、`auth-repository.ts`）の外に SQL が残るのは次の読み取りだけである。どれも 1 文の SELECT を一か所で使うだけで、移しても関数が 1 段増えるだけなので、意図して残した（段階 3 の判断。Issue #4 のコメントに記録）。
+
+| 場所 | 読み取るもの |
+| --- | --- |
+| `server/api/attendance/today.get.ts` | 今日の勤務記録 |
+| `server/api/attendance/month.get.ts` | 月別の勤務記録 |
+| `server/api/reports/month.pdf.get.ts` | 月別 PDF の勤務記録 |
+| `server/utils/attendance.ts` の `openAttendance` | 最も古い未退勤記録。`today.get.ts` と `AttendanceRepository.findOldestOpen` が使う |
+
+別の DB へ移す場合は、この 4 か所も Repository の読み取りメソッドに移す。
+
 ## 実行環境と費用の判断
 
 - **現行 Workers + D1:** D1 は Worker の binding から利用できる。`prepare()` / `batch()` を D1 実装内で使い続ける。Repository を作るだけでクエリ数が減るわけではないため、移行前後で各操作の D1 呼び出し数、`meta.rows_read` / `rows_written`、Worker の CPU・バンドルサイズを比較する。D1 の課金指標は読み書き行数とストレージであり、数値の増減は実測する。[D1 binding](https://developers.cloudflare.com/d1/worker-api/d1-database/)、[D1 の計測指標](https://developers.cloudflare.com/d1/platform/pricing/)、[Workers のバンドル制限](https://developers.cloudflare.com/workers/platform/limits/)。
