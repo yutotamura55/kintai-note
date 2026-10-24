@@ -1,11 +1,11 @@
 import { db, sha256 } from '~~/server/utils/db'
+import { d1AuthRepository } from '~~/server/utils/auth-repository'
 import { registrationOptions } from '~~/server/utils/webauthn'
 import { requireAuthAttempt } from '~~/server/utils/auth'
 export default defineEventHandler(async (event) => {
   await requireAuthAttempt(event, 'invitation')
   const { token } = await readBody<{ token: string }>(event)
-  const invitation = await db(event).prepare(`SELECT i.id invitation_id, u.id, u.employee_code, u.display_name FROM invitations i JOIN users u ON u.id=i.user_id
-    WHERE i.token_hash=? AND i.used_at IS NULL AND i.expires_at>? AND u.status='invited'`).bind(await sha256(token || ''), new Date().toISOString()).first<any>()
+  const invitation = await d1AuthRepository(db(event)).findUsableInvitation(await sha256(token || ''), new Date().toISOString())
   if (!invitation) throw createError({ statusCode: 404, statusMessage: '招待URLが無効、使用済み、または期限切れです。' })
   return registrationOptions(event, invitation, invitation.invitation_id)
 })
