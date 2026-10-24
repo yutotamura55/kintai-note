@@ -11,12 +11,13 @@ export const OPEN_SHIFT_SQL = `(
     OR (original_clock_in_at IS NULL AND clock_in_at IS NOT NULL AND clock_out_at IS NULL)
   )`
 export const EFFECTIVE_CLOCK_IN_SQL = 'COALESCE(original_clock_in_at, clock_in_at)'
+export const OPEN_SHIFT_ORDER_SQL = `${EFFECTIVE_CLOCK_IN_SQL}, id`
 
-export function openAttendance(event: H3Event, userId: string) {
+export function openAttendance(database: D1Database, userId: string) {
   // Old data may contain multiple unfinished records; resolve oldest first.
-  return db(event).prepare(`SELECT * FROM attendance_records
+  return database.prepare(`SELECT * FROM attendance_records
     WHERE user_id=? AND ${OPEN_SHIFT_SQL}
-    ORDER BY ${EFFECTIVE_CLOCK_IN_SQL}, id LIMIT 1`).bind(userId).first<AttendanceRecord>()
+    ORDER BY ${OPEN_SHIFT_ORDER_SQL} LIMIT 1`).bind(userId).first<AttendanceRecord>()
 }
 
 export async function ownedAttendance(event: H3Event, userId: string, recordId: unknown) {
