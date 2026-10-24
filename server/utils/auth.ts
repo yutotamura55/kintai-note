@@ -1,5 +1,6 @@
 import type { H3Event } from 'h3'
-import { db, id, plusMinutes } from './db'
+import { db, id, plusMinutes, sha256 } from './db'
+import { consumeAuthLimit } from './auth-storage'
 import type { User } from './types'
 
 const cookieName = '__Host-kintai-session'
@@ -19,11 +20,27 @@ export async function requireAdmin(event: H3Event) {
   return user
 }
 
+export async function requireAuthAttempt(event: H3Event, action: 'login' | 'invitation' | 'bootstrap' | 'verification') {
+  const limits = { login: 10, invitation: 10, bootstrap: 5, verification: 20 }
+  const visitor = getRequestHeader(event, 'cf-connecting-ip') || getRequestIP(event) || 'unknown'
+  const now = new Date()
+  const key = await sha256(`${action}:${visitor}`)
+  const allowed = await consumeAuthLimit(db(event), key, now.toISOString(), new Date(now.getTime() + 5 * 60_000).toISOString(), limits[action])
+  if (!allowed) throw createError({ statusCode: 429, statusMessage: 'しばらく待ってから再試行してください。' })
+}
+
 export async function createSession(event: H3Event, userId: string) {
   const sessionId = id(); const expiresAt = plusMinutes(60 * 24 * 14)
   await db(event).prepare('INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)').bind(sessionId, userId, expiresAt).run()
-  const secure = getRequestURL(event).hostname !== 'localhost'
-  setCookie(event, cookieName, sessionId, { httpOnly: true, secure, sameSite: 'strict', path: '/', expires: new Date(expiresAt) })
+  setCookie(event, cookieName, sessionId, { ...sessionCookieOptions(event), expires: new Date(expiresAt) })
 }
 
-export function destroySession(event: H3Event) { deleteCookie(event, cookieName, { path: '/' }) }
+function sessionCookieOptions(event: H3Event) {
+  return { httpOnly: true, secure: getRequestURL(event).hostname !== 'localhost', sameSite: 'strict' as const, path: '/' }
+}
+
+export async function destroySession(event: H3Event) {
+  const sessionId = getCookie(event, cookieName)
+  if (sessionId) await db(event).prepare('DELETE FROM sessions WHERE id=?').bind(sessionId).run()
+  deleteCookie(event, cookieName, sessionCookieOptions(event))
+}
