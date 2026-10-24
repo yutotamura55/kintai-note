@@ -176,9 +176,13 @@ try {
       `INSERT INTO attendance_records (id, user_id, work_date, clock_in_at) VALUES
        ('local-test-oldest-a', 'local-test-attendance-user', '1999-01-01', '1999-01-01T00:00:00.000Z'),
        ('local-test-oldest-b', 'local-test-attendance-user', '1999-01-02', '${sameTime ? '1999-01-01' : '1999-01-02'}T00:00:00.000Z')`])
+    assert((await clock('break_start', 'local-test-oldest-b')).status === 409, 'Newer legacy shift must not start a break before the oldest.')
+    assert((await clock('break_end', 'local-test-oldest-b')).status === 409, 'A rejected break start must not enable break end.')
+    assert((await clock('break_start', 'local-test-oldest-a')).status === 200, 'Oldest legacy shift must be able to start a break.')
+    assert((await clock('break_end', 'local-test-oldest-a')).status === 200, 'Oldest legacy shift must be able to end its break.')
     assert((await clock('out', 'local-test-oldest-b')).status === 409, 'Newer legacy shift must not close before the oldest.')
     const pending = (await (await request('/api/attendance/month?month=1999-01')).json()).results
-    assert(pending.length === 2 && pending.every(row => row.clock_out_at === null), 'Rejected out-of-order clock-out changed a record.')
+    assert(pending.length === 2 && pending.every(row => row.clock_out_at === null && row.break_started_at === null), 'Rejected out-of-order actions changed a record.')
     assert((await clock('out', 'local-test-oldest-a')).status === 200, 'Oldest legacy shift must close first.')
     assert((await clock('out', 'local-test-oldest-a')).status === 409, 'Retry must not fall back to the next legacy shift.')
     assert((await clock('out', 'local-test-oldest-b')).status === 200, 'Next legacy shift must close after the oldest.')
