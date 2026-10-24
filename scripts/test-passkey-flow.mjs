@@ -12,15 +12,19 @@ const baseUrl = `http://localhost:${port}`
 const persistTo = '.wrangler/test-passkey-flow'
 const bootstrapToken = 'local-test-passkey-bootstrap-token'
 
+async function respondsOk() {
+  try { return (await fetch(`${baseUrl}/`, { signal: AbortSignal.timeout(1000) })).ok } catch { return false }
+}
+
 async function startWorker({ cwd, wrangler }) {
+  // Never run the test against another server that already listens on this port.
+  if (await respondsOk()) throw new Error(`Port ${port} is already in use; stop that server before running the passkey test.`)
   const worker = spawn(process.execPath, [wrangler, 'dev', '--local', '--port', String(port), '--persist-to', persistTo,
     '--var', `BOOTSTRAP_TOKEN:${bootstrapToken}`, '--var', 'RP_ID:localhost'],
   { cwd, stdio: 'inherit', detached: process.platform !== 'win32' })
   const deadline = Date.now() + 30_000
-  while (Date.now() < deadline) {
-    try {
-      if ((await fetch(`${baseUrl}/`, { signal: AbortSignal.timeout(1000) })).ok) return worker
-    } catch {}
+  while (Date.now() < deadline && worker.exitCode === null) {
+    if (await respondsOk()) return worker
     await new Promise(resolve => setTimeout(resolve, 250))
   }
   // The caller never receives this handle, so stop it here before failing.
@@ -31,9 +35,12 @@ async function startWorker({ cwd, wrangler }) {
 async function stopWorker(worker) {
   if (!worker?.pid || worker.exitCode !== null) return
   const stopped = once(worker, 'exit')
-  if (process.platform === 'win32') worker.kill('SIGTERM')
-  else process.kill(-worker.pid, 'SIGTERM')
+  const signal = name => process.platform === 'win32' ? worker.kill(name) : process.kill(-worker.pid, name)
+  signal('SIGTERM')
+  // Escalate if Wrangler does not shut down, so cleanup cannot hang.
+  const timer = setTimeout(() => signal('SIGKILL'), 10_000)
   await stopped
+  clearTimeout(timer)
 }
 
 // Each browser context stands for one device with its own authenticator.
@@ -158,8 +165,9 @@ export async function testPasskeyFlow({ cwd, run, wrangler }) {
     assert.equal((await me(admin.page)).id, adminUser.id)
     console.log('PASS: passkey setup, invitation, login, added passkey, excluded duplicate and disabled user.')
   } finally {
-    await browser?.close()
-    await stopWorker(worker)
-    await rm(persistTo, { recursive: true, force: true })
+    // Attempt every cleanup step even if an earlier one fails.
+    try { await browser?.close() } finally {
+      try { await stopWorker(worker) } finally { await rm(persistTo, { recursive: true, force: true }) }
+    }
   }
 }
