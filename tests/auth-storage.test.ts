@@ -63,7 +63,10 @@ test('auth limiter denies excess attempts and resets after the window', async ()
     const reset = '2026-10-23T00:05:00.000Z'
     assert.equal(await consumeAuthLimit(database, 'login:visitor', start, reset, 2), true)
     assert.equal(await consumeAuthLimit(database, 'login:visitor', start, reset, 2), true)
+    const changesAtLimit = sqlite.prepare('SELECT total_changes() AS count').get()!.count
     assert.equal(await consumeAuthLimit(database, 'login:visitor', start, reset, 2), false)
+    assert.equal(sqlite.prepare('SELECT total_changes() AS count').get()!.count, changesAtLimit)
+    assert.equal(sqlite.prepare('SELECT attempts FROM auth_rate_limits WHERE key=?').get('login:visitor')!.attempts, 2)
     const changesBeforeRetry = sqlite.prepare('SELECT total_changes() AS count').get()!.count
     assert.equal(await consumeAuthLimit(database, 'login:visitor', start, reset, 2), false)
     assert.equal(sqlite.prepare('SELECT total_changes() AS count').get()!.count, changesBeforeRetry)

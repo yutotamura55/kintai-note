@@ -26,10 +26,10 @@ export async function consumeAuthLimit(database: D1Database, key: string, now: s
   const row = await database.prepare(`INSERT INTO auth_rate_limits (key, attempts, reset_at) VALUES (?, 1, ?)
     ON CONFLICT(key) DO UPDATE SET
       attempts=CASE WHEN auth_rate_limits.reset_at<=? THEN 1
-        WHEN auth_rate_limits.attempts<=? THEN auth_rate_limits.attempts+1
+        WHEN auth_rate_limits.attempts<? THEN auth_rate_limits.attempts+1
         ELSE auth_rate_limits.attempts END,
       reset_at=CASE WHEN auth_rate_limits.reset_at<=? THEN excluded.reset_at ELSE auth_rate_limits.reset_at END
-    WHERE auth_rate_limits.reset_at<=? OR auth_rate_limits.attempts<=?
+    WHERE auth_rate_limits.reset_at<=? OR auth_rate_limits.attempts<?
     RETURNING attempts`)
     .bind(key, resetAt, now, limit, now, now, limit).first<{ attempts: number }>()
   return !!row && row.attempts <= limit
