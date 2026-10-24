@@ -7,8 +7,8 @@ import { stripTypeScriptTypes } from 'node:module'
 // The guarded UPDATE runs against SQLite in attendance-update.test.ts and against local D1 in npm run test:local.
 const source = readFileSync(new URL('../server/utils/attendance-edit.ts', import.meta.url), 'utf8')
 const script = stripTypeScriptTypes(source.replace(/^import .*\n/gm, '').replace(/^export /gm, ''))
-const { findOwnedAttendance, saveAttendanceTimes, restoreAttendanceTimes } = new Function(
-  `${script}\nreturn { findOwnedAttendance, saveAttendanceTimes, restoreAttendanceTimes }`)()
+const { findOwnedAttendance, saveAttendanceTimes, editAttendanceTimes, restoreAttendanceTimes } = new Function(
+  `${script}\nreturn { findOwnedAttendance, saveAttendanceTimes, editAttendanceTimes, restoreAttendanceTimes }`)()
 
 function fakeRepository({ owned = null, outcome = 'saved' }: { owned?: any; outcome?: string } = {}) {
   const calls: any[] = []
@@ -70,4 +70,24 @@ test('restoration writes the stored originals and clears the manual break', asyn
   const notOwned = fakeRepository()
   assert.deepEqual(await restoreAttendanceTimes(notOwned, 'u', 'other', instant), { ok: false, reason: 'record_not_found' })
   assert.deepEqual([...legacy.calls, ...notOwned.calls].map(call => call[0]), ['findOwned', 'findOwned'])
+})
+
+test('an edit checks the running break before the requested break minutes', async () => {
+  const onBreak = { ...record, clock_out_at: null, original_clock_out_at: null, break_started_at: '2026-10-24T03:00:00.000Z', total_break_seconds: 0 }
+  const repository = fakeRepository()
+  assert.deepEqual(await editAttendanceTimes(repository, 'u', onBreak, onBreak.clock_in_at, '2026-10-24T02:00:00.000Z', 'abc', instant),
+    { ok: false, reason: 'clock_out_before_break_start' })
+  assert.deepEqual(await editAttendanceTimes(repository, 'u', onBreak, onBreak.clock_in_at, null, 'abc', instant), { ok: false, reason: 'invalid_break_minutes' })
+  assert.deepEqual(await editAttendanceTimes(repository, 'u', onBreak, onBreak.clock_in_at, null, -5, instant), { ok: false, reason: 'invalid_break_minutes' })
+  assert.deepEqual(repository.calls, [])
+})
+
+test('an edit keeps an omitted break, clears null or empty input, and saves a given number', async () => {
+  const breaks = []
+  for (const requested of [undefined, null, '', '30']) {
+    const repository = fakeRepository()
+    assert.deepEqual(await editAttendanceTimes(repository, 'u', record, record.clock_in_at, record.clock_out_at, requested, instant), { ok: true })
+    breaks.push(repository.calls[0][1].breakMinutes)
+  }
+  assert.deepEqual(breaks, [45, null, null, 30])
 })

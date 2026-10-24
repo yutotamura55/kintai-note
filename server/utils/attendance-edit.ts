@@ -6,6 +6,7 @@ export type AttendanceEditFailure =
   | 'record_not_found'
   | 'clock_in_missing'
   | 'clock_out_not_after_clock_in'
+  | 'clock_out_before_break_start'
   | 'invalid_break_minutes'
   | 'break_exceeds_shift'
   | 'no_original_times'
@@ -73,6 +74,29 @@ export async function saveAttendanceTimes(
     atIso: instant.toISOString(),
   })
   return outcome === 'saved' ? saved : failed('conflict')
+}
+
+// A monthly edit. requestedBreak is undefined when the request omits the break, which keeps
+// the stored value; null or '' clears the manual break.
+export async function editAttendanceTimes(
+  repository: AttendanceRepository,
+  userId: string,
+  record: AttendanceRecord,
+  clockInAt: string | null,
+  clockOutAt: string | null,
+  requestedBreak: unknown,
+  instant: Date,
+): Promise<AttendanceEditResult> {
+  if (record.break_started_at && clockOutAt && clockOutAt < record.break_started_at) return failed('clock_out_before_break_start')
+  let breakMinutes: number | null | undefined = undefined
+  if (requestedBreak === null || requestedBreak === '') {
+    breakMinutes = null
+  } else if (requestedBreak !== undefined) {
+    const parsed = Number(requestedBreak)
+    if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < 0) return failed('invalid_break_minutes')
+    breakMinutes = resolveBreakMinutes(record, parsed, clockOutAt, instant)
+  }
+  return saveAttendanceTimes(repository, userId, record, clockInAt, clockOutAt, breakMinutes, instant)
 }
 
 export async function restoreAttendanceTimes(repository: AttendanceRepository, userId: string, recordId: unknown, instant: Date): Promise<AttendanceEditResult> {

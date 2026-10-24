@@ -6,6 +6,7 @@ const ATTENDANCE_EDIT_FAILURE_RESPONSES: Record<AttendanceEditFailure, { statusC
   record_not_found: { statusCode: 404, statusMessage: '対象の記録が見つかりません。' },
   clock_in_missing: { statusCode: 400, statusMessage: '出勤時刻を入力してください。' },
   clock_out_not_after_clock_in: { statusCode: 400, statusMessage: '退勤時刻は出勤時刻より後にしてください。' },
+  clock_out_before_break_start: { statusCode: 400, statusMessage: '退勤時刻は休憩開始時刻より後にしてください。' },
   invalid_break_minutes: { statusCode: 400, statusMessage: '休憩時間は0分以上の整数で入力してください。' },
   break_exceeds_shift: { statusCode: 400, statusMessage: '休憩時間は出勤から退勤までの総時間以内で入力してください。' },
   no_original_times: { statusCode: 409, statusMessage: '元の打刻時刻が保存されていないため、復元できません。' },
