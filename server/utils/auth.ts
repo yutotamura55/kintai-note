@@ -32,15 +32,16 @@ export async function requireAuthAttempt(event: H3Event, action: 'login' | 'invi
 export async function createSession(event: H3Event, userId: string) {
   const sessionId = id(); const expiresAt = plusMinutes(60 * 24 * 14)
   await db(event).prepare('INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)').bind(sessionId, userId, expiresAt).run()
-  setCookie(event, cookieName, sessionId, { ...sessionCookieOptions(event), expires: new Date(expiresAt) })
+  setCookie(event, cookieName, sessionId, { ...sessionCookieOptions(), expires: new Date(expiresAt) })
 }
 
-function sessionCookieOptions(event: H3Event) {
-  return { httpOnly: true, secure: getRequestURL(event).hostname !== 'localhost', sameSite: 'strict' as const, path: '/' }
+// The __Host- prefix requires Secure even on http://localhost, or browsers drop the cookie.
+function sessionCookieOptions() {
+  return { httpOnly: true, secure: true, sameSite: 'strict' as const, path: '/' }
 }
 
 export async function destroySession(event: H3Event) {
   const sessionId = getCookie(event, cookieName)
   if (sessionId) await db(event).prepare('DELETE FROM sessions WHERE id=?').bind(sessionId).run()
-  deleteCookie(event, cookieName, sessionCookieOptions(event))
+  deleteCookie(event, cookieName, sessionCookieOptions())
 }
