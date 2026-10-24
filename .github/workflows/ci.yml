@@ -20,6 +20,8 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
+      # System libraries for the headless Chromium used by the passkey flow test.
+      - run: npx playwright install-deps chromium
       - run: npm run test:local
 
   terraform:
