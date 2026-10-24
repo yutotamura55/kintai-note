@@ -1,7 +1,7 @@
 import type { H3Event } from 'h3'
 import { db, fromBase64URL, id, isoNow, plusMinutes, toBase64URL } from './db'
 import { completeInvitation } from './invitation'
-import { consumeChallengeRow } from './auth-storage'
+import { d1AuthRepository } from './auth-repository'
 import { requireAuthAttempt } from './auth'
 
 // @peculiar/x509 (used by SimpleWebAuthn when verifying attestations) requires
@@ -21,13 +21,9 @@ function config(event: H3Event) {
 
 export async function saveChallenge(event: H3Event, challenge: string, purpose: 'login' | 'register', userId?: string, invitationId?: string) {
   const challengeId = id()
-  const database = db(event)
-  await database.batch([
-    database.prepare(`DELETE FROM auth_challenges WHERE id IN
-      (SELECT id FROM auth_challenges WHERE expires_at<=? LIMIT 100)`).bind(isoNow()),
-    database.prepare('INSERT INTO auth_challenges (id, challenge, purpose, user_id, invitation_id, expires_at) VALUES (?, ?, ?, ?, ?, ?)')
-      .bind(challengeId, challenge, purpose, userId ?? null, invitationId ?? null, plusMinutes(5)),
-  ])
+  await d1AuthRepository(db(event)).saveChallenge({
+    id: challengeId, challenge, purpose, user_id: userId ?? null, invitation_id: invitationId ?? null, expires_at: plusMinutes(5),
+  }, isoNow())
   const secure = getRequestURL(event).hostname !== 'localhost'
   setCookie(event, 'kintai-challenge', challengeId, { httpOnly: true, secure, sameSite: 'strict', path: '/', maxAge: 300 })
 }
@@ -35,7 +31,7 @@ export async function saveChallenge(event: H3Event, challenge: string, purpose: 
 export async function consumeChallenge(event: H3Event, purpose: 'login' | 'register') {
   const challengeId = getCookie(event, 'kintai-challenge')
   if (!challengeId) throw createError({ statusCode: 400, statusMessage: '認証の有効期限が切れました。もう一度お試しください。' })
-  const row = await consumeChallengeRow(db(event), challengeId, purpose, isoNow())
+  const row = await d1AuthRepository(db(event)).consumeChallenge(challengeId, purpose, isoNow())
   deleteCookie(event, 'kintai-challenge', { path: '/' })
   if (!row) throw createError({ statusCode: 400, statusMessage: '認証の有効期限が切れました。もう一度お試しください。' })
   return row
