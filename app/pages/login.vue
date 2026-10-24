@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { startAuthentication } from '@simplewebauthn/browser'
+import { startAuthentication, type PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/browser'
 const busy = ref(false); const error = ref('')
 async function login() {
   busy.value = true; error.value = ''
   try {
-    const options = await $fetch('/api/auth/passkeys/login-options', { method: 'POST' })
+    const options = await $fetch<PublicKeyCredentialRequestOptionsJSON>('/api/auth/passkeys/login-options', { method: 'POST' })
     const response = await startAuthentication({ optionsJSON: options })
     await $fetch('/api/auth/passkeys/login-verify', { method: 'POST', body: response })
     await navigateTo('/dashboard')

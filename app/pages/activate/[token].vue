@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { startRegistration } from '@simplewebauthn/browser'
+import { startRegistration, type PublicKeyCredentialCreationOptionsJSON } from '@simplewebauthn/browser'
 const route = useRoute(); const busy = ref(false); const error = ref('')
 function messageForRegistrationError(cause: any) {
   if (cause?.data?.statusMessage) return cause.data.statusMessage
@@ -10,7 +10,7 @@ function messageForRegistrationError(cause: any) {
 async function activate() {
   busy.value = true; error.value = ''
   try {
-    const options = await $fetch('/api/auth/activate-options', { method: 'POST', body: { token: route.params.token } })
+    const options = await $fetch<PublicKeyCredentialCreationOptionsJSON>('/api/auth/activate-options', { method: 'POST', body: { token: route.params.token } })
     const response = await startRegistration({ optionsJSON: options })
     await $fetch('/api/auth/activate-verify', { method: 'POST', body: response })
     await navigateTo('/dashboard')

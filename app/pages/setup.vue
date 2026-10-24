@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { startRegistration } from '@simplewebauthn/browser'
+import { startRegistration, type PublicKeyCredentialCreationOptionsJSON } from '@simplewebauthn/browser'
 const token = ref(''); const employeeCode = ref('admin'); const displayName = ref(''); const busy = ref(false); const error = ref('')
 async function setup() {
   busy.value = true; error.value = ''
   try {
-    const options = await $fetch('/api/admin/bootstrap', { method: 'POST', body: { token: token.value, employeeCode: employeeCode.value, displayName: displayName.value } })
+    const options = await $fetch<PublicKeyCredentialCreationOptionsJSON>('/api/admin/bootstrap', { method: 'POST', body: { token: token.value, employeeCode: employeeCode.value, displayName: displayName.value } })
     const response = await startRegistration({ optionsJSON: options })
     await $fetch('/api/auth/passkeys/register-verify', { method: 'POST', body: response })
     await navigateTo('/dashboard')
