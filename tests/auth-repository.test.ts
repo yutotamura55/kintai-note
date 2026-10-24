@@ -4,13 +4,13 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { DatabaseSync } from 'node:sqlite'
 import { d1AuthRepository } from '../server/utils/auth-repository.ts'
 
-function fixture() {
+function fixture({ withUsers = true } = {}) {
   const sqlite = new DatabaseSync(':memory:')
   sqlite.exec(readFileSync(new URL('../db/schema.sql', import.meta.url), 'utf8'))
   for (const file of readdirSync(new URL('../migrations/', import.meta.url)).filter(name => name.endsWith('.sql')).sort()) {
     sqlite.exec(readFileSync(new URL(`../migrations/${file}`, import.meta.url), 'utf8'))
   }
-  sqlite.exec(`INSERT INTO users (id, employee_code, display_name, role, status) VALUES
+  if (withUsers) sqlite.exec(`INSERT INTO users (id, employee_code, display_name, role, status) VALUES
     ('active', 'e1', 'Active', 'member', 'active'), ('disabled', 'e2', 'Disabled', 'admin', 'disabled')`)
   const database = {
     prepare(sql: string) {
@@ -110,5 +110,37 @@ test('attempts are denied over the limit and allowed again after the window', as
     assert.equal(sqlite.prepare('SELECT total_changes() AS count').get()!.count, changesBeforeRetry)
     assert.equal(await repository.consumeAttempt('login:visitor', reset, '2026-10-23T00:10:00.000Z', 2), true)
     assert.equal(sqlite.prepare('SELECT attempts FROM auth_rate_limits WHERE key=?').get('login:visitor')!.attempts, 1)
+  } finally { sqlite.close() }
+})
+
+test('only the first concurrent bootstrap request creates an administrator', async () => {
+  const { sqlite, repository } = fixture({ withUsers: false })
+  try {
+    const outcomes = await Promise.all([
+      repository.createInitialAdmin('admin-1', 'e1', 'First'),
+      repository.createInitialAdmin('admin-2', 'e2', 'Second'),
+    ])
+    assert.deepEqual(outcomes.sort(), [false, true])
+    assert.equal(sqlite.prepare('SELECT COUNT(*) AS count FROM users').get()!.count, 1)
+    assert.equal(sqlite.prepare('SELECT role FROM users').get()!.role, 'admin')
+  } finally { sqlite.close() }
+})
+
+test('only an unused, unexpired invitation of an invited user can be found', async () => {
+  const { sqlite, repository } = fixture()
+  try {
+    const invite = (userId: string, overrides: Partial<{ tokenHash: string; expiresAt: string }> = {}) => repository.createInvitation({
+      invitationId: `invite-${userId}`, userId, employeeCode: userId, displayName: userId,
+      tokenHash: `hash-${userId}`, expiresAt: '2026-10-25T00:00:00.000Z', ...overrides,
+    })
+    await invite('new-user')
+    assert.deepEqual({ ...await repository.findUsableInvitation('hash-new-user', now) },
+      { invitation_id: 'invite-new-user', id: 'new-user', employee_code: 'new-user', display_name: 'new-user' })
+    assert.equal(await repository.findUsableInvitation('hash-new-user', '2026-10-25T00:00:00.000Z'), null, 'An invitation must not be usable at its expiry time.')
+    sqlite.prepare("UPDATE invitations SET used_at=? WHERE id='invite-new-user'").run(now)
+    assert.equal(await repository.findUsableInvitation('hash-new-user', now), null)
+    await invite('returning-user')
+    sqlite.prepare("UPDATE users SET status='active' WHERE id='returning-user'").run()
+    assert.equal(await repository.findUsableInvitation('hash-returning-user', now), null, 'An already active user must not be invited again.')
   } finally { sqlite.close() }
 })

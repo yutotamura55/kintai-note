@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { DatabaseSync } from 'node:sqlite'
-import { completeInvitation } from '../server/utils/invitation.ts'
+import { d1AuthRepository } from '../server/utils/auth-repository.ts'
 
 const now = '2026-10-23T00:00:00.000Z'
 const expiry = '2026-10-24T00:00:00.000Z'
@@ -30,7 +30,7 @@ function fixture() {
     },
   }
   function register(keyId: string, overrides: Record<string, string> = {}) {
-    return completeInvitation(database as never, {
+    return d1AuthRepository(database as never).completeInvitation({
       invitationId: 'invite-1', userId: 'user-1', passkeyId: keyId, credentialId: `credential-${keyId}`,
       publicKey: 'public-key', counter: 0, transports: '[]', deviceType: 'singleDevice', backedUp: 0,
       now, ...overrides,

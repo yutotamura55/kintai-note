@@ -1,6 +1,5 @@
 import type { H3Event } from 'h3'
 import { db, fromBase64URL, id, isoNow, plusMinutes, toBase64URL } from './db'
-import { completeInvitation } from './invitation'
 import { d1AuthRepository } from './auth-repository'
 import { requireAuthAttempt } from './auth'
 
@@ -48,21 +47,21 @@ export async function loginOptions(event: H3Event) {
 export async function verifyLogin(event: H3Event, response: any) {
   const { verifyAuthenticationResponse } = await webauthn()
   const challenge = await consumeChallenge(event, 'login')
-  const passkey = await db(event).prepare('SELECT p.*, u.status FROM passkeys p JOIN users u ON u.id=p.user_id WHERE p.credential_id=?').bind(response.id).first<any>()
+  const repository = d1AuthRepository(db(event))
+  const passkey = await repository.findPasskeyForLogin(response.id)
   if (!passkey || passkey.status !== 'active') throw createError({ statusCode: 401, statusMessage: 'このパスキーは使用できません。' })
   const verification = await verifyAuthenticationResponse({ response, expectedChallenge: challenge.challenge, expectedOrigin: config(event).origin, expectedRPID: config(event).rpID,
     credential: { id: passkey.credential_id, publicKey: fromBase64URL(passkey.public_key), counter: passkey.counter, transports: passkey.transports ? JSON.parse(passkey.transports) : undefined }, requireUserVerification: true })
   if (!verification.verified) throw createError({ statusCode: 401, statusMessage: 'パスキーを確認できませんでした。' })
-  await db(event).prepare('UPDATE passkeys SET counter=?, last_used_at=? WHERE id=?')
-    .bind(verification.authenticationInfo.newCounter, isoNow(), passkey.id).run()
-  return passkey.user_id as string
+  await repository.recordPasskeyUse(passkey.id, verification.authenticationInfo.newCounter, isoNow())
+  return passkey.user_id
 }
 
 export async function registrationOptions(event: H3Event, user: { id: string; employee_code: string; display_name: string }, invitationId?: string) {
   const { generateRegistrationOptions } = await webauthn()
-  const existing = await db(event).prepare('SELECT credential_id, transports FROM passkeys WHERE user_id=?').bind(user.id).all<any>()
+  const existing = await d1AuthRepository(db(event)).listPasskeyCredentials(user.id)
   const options = await generateRegistrationOptions({ rpID: config(event).rpID, rpName: config(event).rpName, userID: new TextEncoder().encode(user.id), userName: user.employee_code, userDisplayName: user.display_name,
-    attestationType: 'none', authenticatorSelection: { residentKey: 'required', userVerification: 'required' }, excludeCredentials: existing.results.map(key => ({ id: key.credential_id, transports: key.transports ? JSON.parse(key.transports) : undefined })) })
+    attestationType: 'none', authenticatorSelection: { residentKey: 'required', userVerification: 'required' }, excludeCredentials: existing.map(key => ({ id: key.credential_id, transports: key.transports ? JSON.parse(key.transports) : undefined })) })
   await saveChallenge(event, options.challenge, 'register', user.id, invitationId)
   return options
 }
@@ -84,13 +83,10 @@ export async function verifyRegistration(event: H3Event, response: any, flow: 'i
     backedUp: verification.registrationInfo.credentialBackedUp ? 1 : 0,
   }
   if (flow === 'invitation') {
-    const completed = await completeInvitation(db(event), { ...passkey, invitationId: challenge.invitation_id as string, now: isoNow() })
+    const completed = await d1AuthRepository(db(event)).completeInvitation({ ...passkey, invitationId: challenge.invitation_id as string, now: isoNow() })
     if (!completed) throw createError({ statusCode: 409, statusMessage: '招待URLが無効、使用済み、または期限切れです。' })
   } else {
-    await db(event).prepare(`INSERT INTO passkeys (id, user_id, credential_id, public_key, counter, transports, device_type, backed_up)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
-      .bind(passkey.passkeyId, passkey.userId, passkey.credentialId, passkey.publicKey, passkey.counter,
-        passkey.transports, passkey.deviceType, passkey.backedUp).run()
+    await d1AuthRepository(db(event)).addPasskey(passkey)
   }
   return { userId: passkey.userId }
 }
