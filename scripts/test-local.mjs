@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process'
 import { once } from 'node:events'
 import { testOriginalTimes } from './test-original-times.mjs'
+import { testPasskeyFlow } from './test-passkey-flow.mjs'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { createHash } from 'node:crypto'
 
@@ -246,6 +247,7 @@ try {
     await run(process.execPath, [wrangler, 'd1', 'execute', 'kintai-note', '--local', '--command',
       `DELETE FROM auth_rate_limits WHERE key IN ('${rateKey}', '${verifyRateKey}')`])
   }
+  await testPasskeyFlow({ cwd, run, wrangler })
   console.log('PASS: unit boundaries, attendance edits, overnight/legacy shifts, unfinished guards, concurrent clock-in, monthly PDF and authentication.')
 } finally {
   if (worker?.pid && worker.exitCode === null) {
