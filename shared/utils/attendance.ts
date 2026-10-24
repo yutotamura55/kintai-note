@@ -56,10 +56,12 @@ export const ATTENDANCE_TRANSITIONS: Record<AttendanceState, Partial<Record<Atte
 type PunchFields = Pick<AttendanceRecord, 'clock_in_at' | 'clock_out_at' | 'original_clock_in_at' | 'original_clock_out_at'
   | 'total_break_seconds' | 'original_total_break_seconds'>
 
+// Clock-in falls back only when the original is null or undefined, while clock-out and break
+// time follow whether a non-empty original clock-in exists; this keeps the earlier results.
 export function punchTimes(record: PunchFields) {
   const tracked = !!record.original_clock_in_at
   return {
-    clockInAt: (tracked ? record.original_clock_in_at : record.clock_in_at) ?? null,
+    clockInAt: record.original_clock_in_at ?? record.clock_in_at ?? null,
     clockOutAt: (tracked ? record.original_clock_out_at : record.clock_out_at) ?? null,
     totalBreakSeconds: (tracked ? record.original_total_break_seconds : record.total_break_seconds) || 0,
   }
