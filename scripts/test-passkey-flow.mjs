@@ -23,6 +23,8 @@ async function startWorker({ cwd, wrangler }) {
     } catch {}
     await new Promise(resolve => setTimeout(resolve, 250))
   }
+  // The caller never receives this handle, so stop it here before failing.
+  await stopWorker(worker)
   throw new Error('Passkey test Worker did not start within 30 seconds.')
 }
 
@@ -37,6 +39,8 @@ async function stopWorker(worker) {
 // Each browser context stands for one device with its own authenticator.
 async function device(browser) {
   const context = await browser.newContext({ baseURL: baseUrl })
+  // Fail a missing element or navigation within a bounded time so cleanup still runs.
+  context.setDefaultTimeout(15_000)
   const page = await context.newPage()
   const cdp = await context.newCDPSession(page)
   await cdp.send('WebAuthn.enable')
