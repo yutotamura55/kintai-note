@@ -1,81 +1,49 @@
-import { createError } from 'h3'
-import { id } from './db'
-import { openAttendance, OPEN_SHIFT_SQL, OPEN_SHIFT_ORDER_SQL, EFFECTIVE_CLOCK_IN_SQL } from './attendance'
 import { workDateAt, type AttendanceAction } from '../../shared/utils/attendance'
+import type { AttendanceRepository } from './attendance-repository'
 
-// Every non-start punch must target the oldest unfinished shift, including legacy rows.
-// Keep this check inside each UPDATE so a concurrent request cannot change the target
-// between a read and the write.
-// All three UPDATEs bind (now, targetId, userId), so the subquery uses ?3 for userId.
-const OLDEST_OPEN_ID_SQL = `(SELECT id FROM attendance_records
-  WHERE user_id=?3 AND ${OPEN_SHIFT_SQL}
-  ORDER BY ${OPEN_SHIFT_ORDER_SQL} LIMIT 1)`
+export type PunchFailure =
+  | 'open_shift_exists'
+  | 'already_clocked_in'
+  | 'no_open_shift'
+  | 'break_start_rejected'
+  | 'break_end_rejected'
+  | 'clock_out_target_missing'
+  | 'on_break'
+  | 'clock_out_rejected'
 
-async function clockIn(database: D1Database, userId: string, instant: Date) {
-  const now = instant.toISOString()
-  const result = await database.prepare(`INSERT INTO attendance_records (id, user_id, work_date, clock_in_at, original_clock_in_at, updated_at)
-    SELECT ?1, ?2, ?3, ?4, ?4, ?4 WHERE NOT EXISTS (
-      SELECT 1 FROM attendance_records WHERE user_id=?2 AND ${OPEN_SHIFT_SQL}
-    ) ON CONFLICT(user_id, work_date) DO UPDATE SET clock_in_at=excluded.clock_in_at, original_clock_in_at=COALESCE(attendance_records.original_clock_in_at, excluded.original_clock_in_at), updated_at=excluded.updated_at
-    WHERE attendance_records.clock_in_at IS NULL`).bind(id(), userId, workDateAt(instant), now).run()
-  if (!result.meta.changes) {
-    const open = await openAttendance(database, userId)
-    throw createError({ statusCode: 409, statusMessage: open
-      ? '未退勤の勤務があります。勤務中なら退勤を記録し、打刻忘れなら月別記録から実際の退勤日時を入力してください。'
-      : 'この勤務日はすでに出勤済みです。' })
-  }
+export type PunchResult = { ok: true } | { ok: false; reason: PunchFailure }
+
+const applied: PunchResult = { ok: true }
+const failed = (reason: PunchFailure): PunchResult => ({ ok: false, reason })
+
+async function clockIn(repository: AttendanceRepository, userId: string, instant: Date) {
+  // The work date and stored time come from the same instant.
+  const command = { userId, action: 'in' as const, atIso: instant.toISOString(), workDate: workDateAt(instant) }
+  if (await repository.applyPunch(command) === 'applied') return applied
+  // Read only after the guarded INSERT failed, to explain why.
+  return failed(await repository.findOldestOpen(userId) ? 'open_shift_exists' : 'already_clocked_in')
 }
 
-async function breakTargetId(database: D1Database, userId: string, recordId: unknown) {
-  const targetId = typeof recordId === 'string' && recordId.trim() ? recordId.trim() : (await openAttendance(database, userId))?.id
-  if (!targetId) throw createError({ statusCode: 400, statusMessage: '勤務中の記録がありません。' })
-  return targetId
+async function changeBreak(repository: AttendanceRepository, userId: string, action: 'break_start' | 'break_end', recordId: unknown, atIso: string) {
+  // An omitted ID means the oldest open shift; the UPDATE re-checks that it still is.
+  const targetId = typeof recordId === 'string' && recordId.trim() ? recordId.trim() : (await repository.findOldestOpen(userId))?.id
+  if (!targetId) return failed('no_open_shift')
+  if (await repository.applyPunch({ userId, action, atIso, recordId: targetId }) === 'applied') return applied
+  return failed(action === 'break_start' ? 'break_start_rejected' : 'break_end_rejected')
 }
 
-async function startBreak(database: D1Database, userId: string, recordId: unknown, now: string) {
-  const targetId = await breakTargetId(database, userId, recordId)
-  const result = await database.prepare(`UPDATE attendance_records SET break_started_at=?1, updated_at=?1
-    WHERE id=?2 AND user_id=?3 AND ${OPEN_SHIFT_SQL}
-    AND break_started_at IS NULL AND ${EFFECTIVE_CLOCK_IN_SQL} <= ?1
-    AND id=${OLDEST_OPEN_ID_SQL}`).bind(now, targetId, userId).run()
-  if (!result.meta.changes) {
-    throw createError({ statusCode: 409, statusMessage: 'すでに休憩中であるか、勤務中でないため休憩を開始できません。' })
-  }
+async function clockOut(repository: AttendanceRepository, userId: string, recordId: unknown, atIso: string) {
+  // Clock-out never falls back to another shift, so the ID is required.
+  if (typeof recordId !== 'string' || !recordId.trim()) return failed('clock_out_target_missing')
+  // This read only selects the message; the UPDATE itself also rejects a shift on break.
+  if ((await repository.findOwned(userId, recordId))?.break_started_at) return failed('on_break')
+  if (await repository.applyPunch({ userId, action: 'out', atIso, recordId }) === 'applied') return applied
+  return failed('clock_out_rejected')
 }
 
-async function endBreak(database: D1Database, userId: string, recordId: unknown, now: string) {
-  const targetId = await breakTargetId(database, userId, recordId)
-  const result = await database.prepare(`UPDATE attendance_records SET
-    total_break_seconds = total_break_seconds + max(0, strftime('%s', ?1) - strftime('%s', break_started_at)),
-    original_total_break_seconds = original_total_break_seconds + max(0, strftime('%s', ?1) - strftime('%s', break_started_at)),
-    break_started_at = NULL,
-    updated_at = ?1
-    WHERE id=?2 AND user_id=?3 AND ${OPEN_SHIFT_SQL} AND break_started_at IS NOT NULL
-    AND break_started_at <= ?1
-    AND id=${OLDEST_OPEN_ID_SQL}`).bind(now, targetId, userId).run()
-  if (!result.meta.changes) {
-    throw createError({ statusCode: 409, statusMessage: '休憩中ではないか、記録が更新されているため休憩を終了できません。' })
-  }
-}
-
-async function clockOut(database: D1Database, userId: string, recordId: unknown, now: string) {
-  if (typeof recordId !== 'string' || !recordId.trim()) {
-    throw createError({ statusCode: 400, statusMessage: '退勤対象がありません。画面を再読み込みして確認してください。' })
-  }
-  const current = await database.prepare('SELECT break_started_at FROM attendance_records WHERE id=? AND user_id=?').bind(recordId, userId).first<{ break_started_at: string | null }>()
-  if (current?.break_started_at) {
-    throw createError({ statusCode: 409, statusMessage: '休憩中のため退勤できません。先に休憩終了を記録してください。' })
-  }
-  const result = await database.prepare(`UPDATE attendance_records SET clock_out_at=?1, original_clock_out_at=COALESCE(original_clock_out_at, ?1), updated_at=?1
-    WHERE id=?2 AND user_id=?3 AND ${OPEN_SHIFT_SQL} AND ${EFFECTIVE_CLOCK_IN_SQL} < ?1 AND break_started_at IS NULL
-    AND id=${OLDEST_OPEN_ID_SQL}`).bind(now, recordId, userId).run()
-  if (!result.meta.changes) throw createError({ statusCode: 409, statusMessage: '記録が更新されたか、先に退勤すべき勤務があるか、出勤日時が現在以降です。画面を更新して確認してください。' })
-}
-
-export async function recordPunch(database: D1Database, userId: string, action: AttendanceAction, recordId: unknown, instant: Date) {
-  if (action === 'in') return clockIn(database, userId, instant)
-  const now = instant.toISOString()
-  if (action === 'break_start') return startBreak(database, userId, recordId, now)
-  if (action === 'break_end') return endBreak(database, userId, recordId, now)
-  return clockOut(database, userId, recordId, now)
+export async function recordPunch(repository: AttendanceRepository, userId: string, action: AttendanceAction, recordId: unknown, instant: Date): Promise<PunchResult> {
+  if (action === 'in') return clockIn(repository, userId, instant)
+  const atIso = instant.toISOString()
+  if (action === 'out') return clockOut(repository, userId, recordId, atIso)
+  return changeBreak(repository, userId, action, recordId, atIso)
 }

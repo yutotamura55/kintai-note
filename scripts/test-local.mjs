@@ -189,6 +189,30 @@ try {
     await run(process.execPath, [wrangler, 'd1', 'execute', 'kintai-note', '--local', '--command',
       "DELETE FROM attendance_records WHERE user_id='local-test-attendance-user' AND id IN ('local-test-oldest-a','local-test-oldest-b')"])
   }
+
+  // Another real user (created by testOriginalTimes) must not punch this user's open shift.
+  const ownedOpenId = 'local-test-owned-open'
+  await run(process.execPath, [wrangler, 'd1', 'execute', 'kintai-note', '--local', '--command',
+    `INSERT INTO attendance_records (id, user_id, work_date, clock_in_at, original_clock_in_at)
+     VALUES ('${ownedOpenId}', 'local-test-attendance-user', '1998-01-01', '1998-01-01T00:00:00.000Z', '1998-01-01T00:00:00.000Z')`])
+  const otherClock = (action, recordId) => request('/api/attendance/clock', {
+    method: 'POST', body: JSON.stringify({ action, recordId }), headers: { cookie: '__Host-kintai-session=local-test-other-session' },
+  })
+  const readOwnedOpen = async () => (await (await request('/api/attendance/month?month=1998-01')).json()).results.find(row => row.id === ownedOpenId)
+  const openBefore = await readOwnedOpen()
+  assert((await otherClock('break_start', ownedOpenId)).status === 409, "Another user's record ID must not start a break.")
+  assert((await otherClock('out', ownedOpenId)).status === 409, "Another user's record ID must not clock out.")
+  assert((await otherClock('break_start')).status === 400, 'A break without an ID must not fall back to another user.')
+  assert(JSON.stringify(await readOwnedOpen()) === JSON.stringify(openBefore), "Rejected punches changed another user's record.")
+  assert((await clock('break_start', ownedOpenId)).status === 200, 'Owner break start failed.')
+  const onBreak = await readOwnedOpen()
+  assert((await otherClock('break_end', ownedOpenId)).status === 409, "Another user's record ID must not end a break.")
+  const otherOut = await otherClock('out', ownedOpenId)
+  assert(otherOut.status === 409 && !(await otherOut.text()).includes('休憩中のため'), "Clock-out must not reveal another user's break state.")
+  assert(JSON.stringify(await readOwnedOpen()) === JSON.stringify(onBreak), "Rejected punches changed another user's break.")
+  assert((await clock('break_end', ownedOpenId)).status === 200 && (await clock('out', ownedOpenId)).status === 200, 'Owner could not finish the shift.')
+  await run(process.execPath, [wrangler, 'd1', 'execute', 'kintai-note', '--local', '--command',
+    `DELETE FROM attendance_records WHERE id='${ownedOpenId}'`])
   const logout = await request('/api/auth/logout', { method: 'POST' })
   assert(logout.status === 200, 'Logout failed.')
   const reusedSession = await request('/api/auth/me')
