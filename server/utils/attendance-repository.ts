@@ -6,12 +6,24 @@ export type PunchCommand =
   | { userId: string; action: 'in'; atIso: string; workDate: string }
   | { userId: string; action: 'out' | 'break_start' | 'break_end'; atIso: string; recordId: string }
 
-// Attendance persistence used by the punch workflow. Reads are for choosing a target or
-// explaining a failure; only applyPunch decides whether a punch happened.
+export type SaveTimesCommand = {
+  userId: string
+  recordId: string
+  expectedClockInAt: string | null
+  expectedClockOutAt: string | null
+  clockInAt: string
+  clockOutAt: string | null
+  breakMinutes: number | null
+  atIso: string
+}
+
+// Attendance persistence used by the punch and edit workflows. Reads are for choosing a
+// target or explaining a failure; only applyPunch and saveTimes decide whether a write happened.
 export interface AttendanceRepository {
   findOldestOpen(userId: string): Promise<AttendanceRecord | null>
   findOwned(userId: string, recordId: string): Promise<AttendanceRecord | null>
   applyPunch(command: PunchCommand): Promise<'applied' | 'unchanged'>
+  saveTimes(command: SaveTimesCommand): Promise<'saved' | 'conflict'>
 }
 
 // Every non-start punch must target the oldest unfinished shift, including legacy rows.
@@ -46,6 +58,24 @@ const CLOCK_OUT_SQL = `UPDATE attendance_records SET clock_out_at=?1, original_c
     WHERE id=?2 AND user_id=?3 AND ${OPEN_SHIFT_SQL} AND ${EFFECTIVE_CLOCK_IN_SQL} < ?1 AND break_started_at IS NULL
     AND id=${OLDEST_OPEN_ID_SQL}`
 
+// Edits succeed only if both times are still those the editor read. Clearing clock-out must
+// not leave a second unfinished shift. Legacy rows (no original clock-in) finalize an
+// ongoing break when a clock-out is entered; tracked punches keep their break running.
+const SAVE_TIMES_SQL = `UPDATE attendance_records SET
+      clock_in_at=?1,
+      clock_out_at=?2,
+      break_minutes=?3,
+      total_break_seconds = CASE WHEN original_clock_in_at IS NULL AND ?2 IS NOT NULL AND break_started_at IS NOT NULL
+        THEN total_break_seconds + max(0, strftime('%s', ?2) - strftime('%s', break_started_at)) ELSE total_break_seconds END,
+      original_total_break_seconds = CASE WHEN original_clock_in_at IS NULL AND ?2 IS NOT NULL AND break_started_at IS NOT NULL
+        THEN original_total_break_seconds + max(0, strftime('%s', ?2) - strftime('%s', break_started_at)) ELSE original_total_break_seconds END,
+      break_started_at = CASE WHEN original_clock_in_at IS NULL AND ?2 IS NOT NULL THEN NULL ELSE break_started_at END,
+      updated_at=?4
+    WHERE id=?5 AND user_id=?6 AND clock_in_at IS ?7 AND clock_out_at IS ?8
+    AND (?2 IS NOT NULL OR NOT EXISTS (
+      SELECT 1 FROM attendance_records WHERE user_id=?6 AND id<>?5 AND ${OPEN_SHIFT_SQL}
+    ))`
+
 const UPDATE_SQL = { break_start: BREAK_START_SQL, break_end: BREAK_END_SQL, out: CLOCK_OUT_SQL }
 
 export function d1AttendanceRepository(database: D1Database): AttendanceRepository {
@@ -59,6 +89,11 @@ export function d1AttendanceRepository(database: D1Database): AttendanceReposito
         : database.prepare(UPDATE_SQL[command.action]).bind(command.atIso, command.recordId, command.userId)
       const result = await statement.run()
       return result.meta.changes ? 'applied' : 'unchanged'
+    },
+    async saveTimes(command) {
+      const result = await database.prepare(SAVE_TIMES_SQL).bind(command.clockInAt, command.clockOutAt, command.breakMinutes, command.atIso,
+        command.recordId, command.userId, command.expectedClockInAt, command.expectedClockOutAt).run()
+      return result.meta.changes ? 'saved' : 'conflict'
     },
   }
 }

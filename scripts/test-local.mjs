@@ -203,7 +203,12 @@ try {
   assert((await otherClock('break_start', ownedOpenId)).status === 409, "Another user's record ID must not start a break.")
   assert((await otherClock('out', ownedOpenId)).status === 409, "Another user's record ID must not clock out.")
   assert((await otherClock('break_start')).status === 400, 'A break without an ID must not fall back to another user.')
-  assert(JSON.stringify(await readOwnedOpen()) === JSON.stringify(openBefore), "Rejected punches changed another user's record.")
+  const otherEdit = await request('/api/attendance/record', {
+    method: 'PUT', body: JSON.stringify({ id: ownedOpenId, clockIn: '1998-01-01T08:00', clockOut: '1998-01-01T17:00' }),
+    headers: { cookie: '__Host-kintai-session=local-test-other-session' },
+  })
+  assert(otherEdit.status === 404, "Another user's record ID must not be edited.")
+  assert(JSON.stringify(await readOwnedOpen()) === JSON.stringify(openBefore), "Rejected punches or edits changed another user's record.")
   assert((await clock('break_start', ownedOpenId)).status === 200, 'Owner break start failed.')
   const onBreak = await readOwnedOpen()
   assert((await otherClock('break_end', ownedOpenId)).status === 409, "Another user's record ID must not end a break.")

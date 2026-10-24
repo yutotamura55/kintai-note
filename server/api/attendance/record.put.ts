@@ -1,11 +1,17 @@
 import { currentUser } from '~~/server/utils/auth'
-import { ownedAttendance, resolveBreakMinutes, saveAttendanceTimes } from '~~/server/utils/attendance'
+import { db } from '~~/server/utils/db'
+import { findOwnedAttendance, resolveBreakMinutes, saveAttendanceTimes } from '~~/server/utils/attendance-edit'
+import { attendanceEditError } from '~~/server/utils/attendance-edit-errors'
+import { d1AttendanceRepository } from '~~/server/utils/attendance-repository'
 import { japanDateTime, parseJapanDateTime } from '~~/shared/utils/attendance'
 
 export default defineEventHandler(async (event) => {
   const user = await currentUser(event)
   const body = await readBody<{ id?: string, clockIn?: string | null, clockOut?: string | null, breakMinutes?: number | string | null }>(event)
-  const record = await ownedAttendance(event, user.id, body?.id)
+  const repository = d1AttendanceRepository(db(event))
+  const owned = await findOwnedAttendance(repository, user.id, body?.id)
+  if (!owned.ok) throw attendanceEditError(owned.reason)
+  const { record } = owned
 
   // Retain support for old, already-open clients sending HH:MM. Never infer "next day".
   const parse = (value: unknown, previous: string | null) => {
@@ -36,6 +42,7 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  await saveAttendanceTimes(event, user.id, record, clockInAt, clockOutAt, breakMinutes)
+  const result = await saveAttendanceTimes(repository, user.id, record, clockInAt, clockOutAt, breakMinutes, new Date())
+  if (!result.ok) throw attendanceEditError(result.reason)
   return { ok: true }
 })
