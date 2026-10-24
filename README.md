@@ -2,6 +2,23 @@
 
 少人数チーム向けのパスキー認証つき勤怠管理ツールです。Nuxt を Cloudflare Workers に、データを Cloudflare D1 に配置します。
 
+## 公開コミットのメールアドレス
+
+Gitのコミットに記録したauthor・committerのメールアドレスは、公開リポジトリの履歴から見えます。
+このリポジトリのオーナーは、今後のコミット用にGitHubの`noreply`アドレスをローカルGit設定へ登録しています。
+過去のコミット履歴は書き換えていません。
+
+新しいクローンで作業するときは、GitHubの Settings → Emails で自分の`noreply`アドレスを確認してください。
+そのクローンのルートで、次の形式のコマンドを実行します。山括弧の部分を自分のアドレスに置き換えます。
+
+```bash
+git config --local user.email '<自分の GitHub noreply アドレス>'
+git config --local --get user.email
+```
+
+設定はクローンごとの`.git/config`に保存され、リポジトリには含まれません。
+コミットする前に表示されたアドレスを確認してください。
+
 ## セットアップ
 
 ### VS Code Dev Container
