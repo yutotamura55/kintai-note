@@ -2,6 +2,21 @@
 
 更新日: 2026-09-21
 
+## 2026-10-25 の確認
+
+PR #32 は 2026-10-24 に `main` へマージされ、同日の本番デプロイで反映されました。2026-10-25 時点の本番 Worker（`https://kintai-note.yutotamura.workers.dev`、バージョン `c89ff55d-e7f3-4c09-9edb-a9b45deba5a5`）で、本番のデータを書き換えない次の要求を送って確かめました。
+
+| 要求 | 結果 |
+| --- | --- |
+| `GET /`、`GET /login` | `Strict-Transport-Security: max-age=31536000`、`Content-Security-Policy: frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'`、`X-Frame-Options: DENY`、`X-Content-Type-Options: nosniff`、`Referrer-Policy: no-referrer`、`Permissions-Policy: camera=(), microphone=(), geolocation=()` が付く |
+| Cookie なしの `GET /api/auth/me` | 401（「ログインが必要です。」） |
+
+認証オプションの発行と回数制限は、本番の D1 に challenge や回数の行を書き込むため、本番では試していません。ログアウト後のセッションの拒否、challenge の一度限りの消費、初回管理者の同時作成の防止、回数制限、招待 URL の一度限りの使用は、単体テストとローカルの Worker + D1 の統合テストで確かめています。パスキーの登録・ログイン、ログアウト、無効化した利用者のセッションの拒否は、仮想のパスキー端末を使う画面テスト（`scripts/test-passkey-flow.mjs`）でも確かめています。
+
+Cloudflare の WAF カスタムルールとレート制限ルールは、ゾーン（自分のドメイン）単位の機能で、`workers.dev` には設定できません（[WAF のフェーズと範囲](https://developers.cloudflare.com/waf/reference/phases/)、[workers.dev](https://developers.cloudflare.com/workers/configuration/routing/workers-dev/)）。そのため、下の「2026-10-23 の対応状況」で未確認としていた WAF・Rate Limiting は、今の構成では使えないと分かりました。今の守りはアプリ側の接続元ごとの回数制限だけで、接続元を分散した大量の要求は防げません。
+
+次の項目は、運用の確認や判断が必要なため #49 に分けました。独自ドメインへの移行の判断、デプロイ用 API トークンの権限と対象範囲、D1 を復旧するときの書き込みの止め方、契約プラン（Time Travel で戻せる期間と Workers の利用制限）です。
+
 ## 2026-10-23 の対応状況
 
 以下の「結論」と「指摘事項」は、2026-09-21時点の静的レビュー記録です。
