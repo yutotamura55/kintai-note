@@ -102,12 +102,13 @@ Issue #11 はこの設計方針と検証条件の決定で完了する。段階 
 | 2. 打刻 | #36 | 出勤・休憩・退勤の条件付き書き込み（`AttendanceRepository.applyPunch`）と、打刻の手順（`attendance-punch.ts`） |
 | 3. 勤怠の編集・復元 | #37 | 出退勤時刻の保存（`AttendanceRepository.saveTimes`）と、編集・復元の手順（`attendance-edit.ts`） |
 | 4 の前提 | #38 | パスキーの登録・ログインが成功する経路の画面テスト（`scripts/test-passkey-flow.mjs`） |
-| 4. セッション | #39 | セッションの取得・作成・削除（`AuthRepository`） |
+| 4. セッション | #39 | セッションの取得・作成・削除（`d1AuthRepository`） |
 | 4. challenge・試行制限 | #40 | challenge の保存・一度限りの消費、試行回数の更新 |
 | 4. 招待・パスキー | この節を追加した PR | パスキーの検索・使用記録・一覧・追加、招待の作成・検索・使用、初回管理者の作成と、その前の利用者一覧 |
 
 設計案から変えた点：
 
+- 認証は、D1 の実装を返す関数 `d1AuthRepository` だけにし、`AuthRepository` インターフェースは置かない。テストで置き換える使い方がなく、実装が 1 つしかないため。段階 4 の後、別の PR でインターフェースを外した。勤怠の `AttendanceRepository` は、打刻と編集の手順をテストで偽の実装に置き換えて確かめるので残す。
 - `findActiveSessionUser` は `findSessionUser` にした。利用者が `active` かどうかは、Repository ではなく `auth.ts` が判定するため。
 - `SaveTimesCommand` と `saveChallenge` には、`updated_at` や期限切れの判定に使う現在時刻を加えた。時刻は呼び出し側が決める。
 - 勤怠の失敗理由は、Application service がコードで返し、HTTP 層が既存の 400 / 404 / 409 と日本語メッセージに変換する（`clock.post.ts`、`attendance-edit-errors.ts`）。認証は手順と呼べる処理が少ないため、Application service を作らず、`auth.ts` と `webauthn.ts` が Cookie・時刻・WebAuthn の検証・HTTP エラーを受け持つ。
