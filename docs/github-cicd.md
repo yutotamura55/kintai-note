@@ -27,6 +27,7 @@ production environmentに次を登録します。
 Settings → Secrets and variables → Actions → Variablesに `PRODUCTION_DEPLOY_ENABLED=true` を登録すると自動デプロイが有効になります。トークン値をGitに保存しないでください。BOOTSTRAP_TOKENはCIでは不要です。
 
 `main` には有効な `main-pr-and-ci` ruleset を設定し、PRと `Local integration tests`・`Static checks`・`Terraform validation` の成功を必須にしています。`Static checks` は 2026-10-25 に加えました。
+必須チェックは strict の設定で、PRブランチが最新の `main` を取り込んだ状態で成功している必要があります。`main` が先に進んだら、PR画面の **Update branch** などで取り込み、その状態のチェックが成功してからマージします。
 旧Branch protection画面にルールがなくても、このrulesetが適用されます。
 PRを手動でマージすると `main` へのpushで検証が始まり、成功後に `production` へ自動デプロイします。
 `production` に追加の承認者は設定していません。
