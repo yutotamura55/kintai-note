@@ -51,14 +51,28 @@ export const ATTENDANCE_TRANSITIONS: Record<AttendanceState, Partial<Record<Atte
 // Rows created before original-time tracking existed (migration 0001) have
 // `original_clock_in_at === null` forever; for those legacy rows only, we fall back to the
 // editable fields since there is no tracked punch history to trust instead.
+//
+// The server applies the same rule in SQL (OPEN_SHIFT_SQL and the edit UPDATE).
+type PunchFields = Pick<AttendanceRecord, 'clock_in_at' | 'clock_out_at' | 'original_clock_in_at' | 'original_clock_out_at'
+  | 'total_break_seconds' | 'original_total_break_seconds'>
+
+// Clock-in falls back only when the original is null or undefined, while clock-out and break
+// time follow whether a non-empty original clock-in exists; this keeps the earlier results.
+export function punchTimes(record: PunchFields) {
+  const tracked = !!record.original_clock_in_at
+  return {
+    clockInAt: record.original_clock_in_at ?? record.clock_in_at ?? null,
+    clockOutAt: (tracked ? record.original_clock_out_at : record.clock_out_at) ?? null,
+    totalBreakSeconds: (tracked ? record.original_total_break_seconds : record.total_break_seconds) || 0,
+  }
+}
+
 export function attendanceState(
-  record: Pick<AttendanceRecord, 'clock_in_at' | 'clock_out_at' | 'original_clock_in_at' | 'original_clock_out_at' | 'break_started_at'> | null | undefined,
+  record: (PunchFields & Pick<AttendanceRecord, 'break_started_at'>) | null | undefined,
 ): AttendanceState {
-  const trackedIn = record?.original_clock_in_at ?? null
-  const effectiveIn = trackedIn ?? record?.clock_in_at ?? null
-  if (!effectiveIn) return 'idle'
-  const effectiveOut = trackedIn ? (record?.original_clock_out_at ?? null) : (record?.clock_out_at ?? null)
-  if (effectiveOut) return 'done'
+  const punch = record ? punchTimes(record) : null
+  if (!punch?.clockInAt) return 'idle'
+  if (punch.clockOutAt) return 'done'
   if (record?.break_started_at) return 'on_break'
   return 'working'
 }
@@ -132,7 +146,7 @@ export function calculatePunchWorkMinutes(record: AttendanceRecord, now: Date = 
 /** Duration used by the live dashboard. Once original punch tracking exists, editable
  * month-page values are deliberately ignored. Legacy rows fall back to their stored fields. */
 export function calculateOriginalBreakMinutes(record: AttendanceRecord, now: Date = new Date()): number {
-  let seconds = record.original_clock_in_at ? (record.original_total_break_seconds || 0) : (record.total_break_seconds || 0)
+  let seconds = punchTimes(record).totalBreakSeconds
   if (record.break_started_at) {
     const start = new Date(record.break_started_at).getTime()
     if (now.getTime() > start) seconds += Math.floor((now.getTime() - start) / 1000)
@@ -141,17 +155,16 @@ export function calculateOriginalBreakMinutes(record: AttendanceRecord, now: Dat
 }
 
 export function calculateOriginalWorkMinutes(record: AttendanceRecord, now: Date = new Date()): number {
-  const startValue = record.original_clock_in_at ?? record.clock_in_at
-  if (!startValue) return 0
-  const start = new Date(startValue).getTime()
-  const endValue = record.original_clock_in_at ? record.original_clock_out_at : record.clock_out_at
-  const end = endValue
-    ? new Date(endValue).getTime()
+  const punch = punchTimes(record)
+  if (!punch.clockInAt) return 0
+  const start = new Date(punch.clockInAt).getTime()
+  const end = punch.clockOutAt
+    ? new Date(punch.clockOutAt).getTime()
     : (record.break_started_at ? new Date(record.break_started_at).getTime() : now.getTime())
   if (end <= start) return 0
   const grossMinutes = Math.floor((end - start) / (60 * 1000))
   const breakMinutes = record.break_started_at
-    ? Math.floor((record.original_clock_in_at ? (record.original_total_break_seconds || 0) : (record.total_break_seconds || 0)) / 60)
+    ? Math.floor(punch.totalBreakSeconds / 60)
     : calculateOriginalBreakMinutes(record, now)
   return Math.max(0, grossMinutes - breakMinutes)
 }
