@@ -52,6 +52,52 @@ npm run test:unit
 4. `.dev.vars.example` を `.dev.vars` として複製し、初期管理者作成用トークンを設定。
 5. `npm run dev` で起動し、`/setup` で最初の管理者を作成します。管理者作成後は `BOOTSTRAP_TOKEN` を削除してください。
 
+## コードの検査
+
+コミットの前に、次のコマンドを実行します。Dev Container のターミナルでも、ホストで直接開発する場合でも同じです。
+
+```bash
+npm run check
+```
+
+`npm run check` は、次の 3 つを順に実行し、どれか 1 つでも失敗すると止まります。ESLint は警告も失敗として扱います。
+
+| 順番 | 内容 | 単独で実行するコマンド | 自動で直すコマンド |
+| --- | --- | --- | --- |
+| 1 | 書式が Prettier の整形どおりかの確認 | `npm run format:check` | `npm run format` |
+| 2 | ESLint（Nuxt の推奨ルール `@nuxt/eslint-config`）による誤りの検出 | `npm run lint` | `npx eslint . --fix`（自動で直せる指摘だけ） |
+| 3 | 型検査（`nuxt typecheck`、vue-tsc）。画面・サーバー・共有コード・テストが対象 | `npm run typecheck` | なし |
+
+GitHub Actions の `Static checks` ジョブでも同じ `npm run check` を実行し、失敗すると本番デプロイは行われません。
+
+サーバー側の型は、`wrangler types` が生成した 2 つのファイルから読み込みます。どちらも手で編集しないでください。
+
+| ファイル | 内容 | 作り直すとき | 作り直す方法 |
+| --- | --- | --- | --- |
+| `server/worker-runtime.d.ts` | `D1Database` などの Workers の実行環境の型 | `wrangler.jsonc` の互換日付・互換フラグを変えたとき、Wrangler を更新したとき | `npm run types:workers` |
+| `server/cloudflare-env.d.ts` | `DB` などのバインディングを持つ `Env` の型 | `wrangler.jsonc` のバインディングを変えたとき | ファイルの 2 行目に書かれたコマンド（`wrangler types --include-runtime=false server/cloudflare-env.d.ts`） |
+
+`npm run typecheck` は最初に `server/worker-runtime.d.ts` が `wrangler.jsonc` の互換日付・フラグと合っているかを確かめ、合っていなければ失敗します。`server/cloudflare-env.d.ts` は、ビルドの成果物と `.dev.vars` の有無で生成結果が変わるため、この確認の対象にしていません。
+
+### 検査の対象外と例外
+
+| 対象 | 内容 | 理由 |
+| --- | --- | --- |
+| Prettier | 生成ファイル 2 つ、`package-lock.json`、Markdown を整形しない（`.prettierignore`） | 生成ファイルは作り直したときの内容を保つため。Markdown は手書きの改行と表を保つため |
+| ESLint | 生成ファイル 2 つを検査しない（`eslint.config.mjs`） | 同上 |
+| ESLint | 書式に関わるルールを `eslint-config-prettier` で外す | 書式は Prettier が決め、両者が逆向きに直し合わないようにするため（例：`vue/html-self-closing`） |
+| ESLint | `tests/` だけ `@typescript-eslint/no-explicit-any` と `@typescript-eslint/no-unsafe-function-type` を外す | テストは製品のソースを `new Function` で評価し、手作りの偽の部品を渡すため、扱う値に型がない |
+
+書式を一括で整えたコミット（PR #46）は `.git-blame-ignore-revs` に登録しています。GitHub の blame 画面ではこのコミットが飛ばされます。手元の `git blame` で飛ばすには、一度だけ `git config blame.ignoreRevsFile .git-blame-ignore-revs` を実行してください。
+
+### 今後厳しくする段階
+
+型検査は Nuxt の既定で `strict` が有効です。次の順に、触るファイルから厳しくします。各段階は通常の作業とは別の Issue と PR で進めます。
+
+1. テストの `any` と `Function` 型を具体的な型に置き換え、`tests/` の例外を外す。
+2. typescript-eslint の型情報を使うルール（`recommendedTypeChecked`）を試し、既存コードの指摘の数を確かめてから有効にする。
+3. TypeScript の `noUncheckedIndexedAccess`（配列や辞書の要素を `undefined` かもしれない値として扱う）を試し、指摘の数を確かめてから有効にする。
+
 ## ローカル検証
 
 Node.js 22 を使って、次のコマンドを実行します。
@@ -69,17 +115,6 @@ npm run test:local
 Chromium 本体は初回の実行時に `node_modules` 内へダウンロードされます。Chromium の動作に必要なシステムライブラリは Dev Container と GitHub Actions では用意済みです。ホストで直接実行する場合は、最初に一度 `npx playwright install-deps chromium` を実行してください。このコマンドは `sudo` で OS のパッケージをインストールします。
 
 `npm run test:unit` では、日本時間の午前4時直前／ちょうど、月末・年末・うるう日、日時入力の検証と画面の操作テストを高速に実行できます。日時はテストに直接渡すため、PCの現在時刻・タイムゾーンに依存しません。本番APIにテスト用時刻の指定機能は追加していません。
-
-型の検査は `npm run typecheck` で実行します。画面・サーバー・共有コード・テストを `nuxt typecheck`（vue-tsc）で検査します。GitHub Actions でも同じ検査を実行し、失敗すると本番デプロイは行われません。
-
-サーバー側の型は、`wrangler types` が生成した 2 つのファイルから読み込みます。どちらも手で編集しないでください。
-
-| ファイル | 内容 | 作り直すとき | 作り直す方法 |
-| --- | --- | --- | --- |
-| `server/worker-runtime.d.ts` | `D1Database` などの Workers の実行環境の型 | `wrangler.jsonc` の互換日付・互換フラグを変えたとき、Wrangler を更新したとき | `npm run types:workers` |
-| `server/cloudflare-env.d.ts` | `DB` などのバインディングを持つ `Env` の型 | `wrangler.jsonc` のバインディングを変えたとき | ファイルの 2 行目に書かれたコマンド（`wrangler types --include-runtime=false server/cloudflare-env.d.ts`） |
-
-`npm run typecheck` は最初に `server/worker-runtime.d.ts` が `wrangler.jsonc` の互換日付・フラグと合っているかを確かめ、合っていなければ失敗します。`server/cloudflare-env.d.ts` は、ビルドの成果物と `.dev.vars` の有無で生成結果が変わるため、この確認の対象にしていません。
 
 `--local` を明示しているため、Cloudflare上のWorker・D1・シークレットには接続しません。ローカルの実データは `.wrangler/` に保存され、Git管理対象外です。
 

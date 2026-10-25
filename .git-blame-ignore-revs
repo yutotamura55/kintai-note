@@ -1,0 +1,5 @@
+# Commits that only reformat code; git blame skips them.
+# Locally: git config blame.ignoreRevsFile .git-blame-ignore-revs
+
+# style: Prettier を導入し、コードを一括で整形する (#46)
+fb8584b0f49f47c2946aa42444ade9d4fdb81d6e

@@ -59,7 +59,9 @@ async function stopWorker(worker) {
   const signal = (name) => {
     try {
       process.platform === 'win32' ? worker.kill(name) : process.kill(-worker.pid, name)
-    } catch {} // already gone
+    } catch {
+      // The process has already exited.
+    }
   }
   signal('SIGTERM')
   // Escalate if Wrangler does not shut down, so cleanup cannot hang.

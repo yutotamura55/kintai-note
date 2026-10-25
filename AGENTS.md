@@ -10,6 +10,11 @@
 - After the user manually merges, the assistant may monitor the resulting deployment when requested. Do not trigger a production deployment merely to bypass the user's merge step.
 - This policy persists across sessions. Change it only if the user explicitly requests a revision to the policy itself.
 
+## Checks before committing
+
+- Run `npm run check` (Prettier check, ESLint, and type checking) before each commit, and commit only when it passes. It runs the same way in the Dev Container and on the host; README "コードの検査" explains each step and how to fix failures.
+- Do not silence a failure with a suppression comment or by relaxing the configuration. When an exception is unavoidable, explain the reason in a code comment and in the pull request, and add it to the exceptions table in README.
+
 ## Branching policy
 
 - Create a dedicated branch for each Issue or other independently reviewable change.

@@ -12,8 +12,8 @@ async function add() {
     const response = await startRegistration({ optionsJSON: options })
     await $fetch('/api/auth/passkeys/register-verify', { method: 'POST', body: response })
     message.value = 'パスキーを追加しました。'
-  } catch (e: any) {
-    message.value = e?.data?.statusMessage || '追加できませんでした。'
+  } catch (cause) {
+    message.value = apiErrorMessage(cause, '追加できませんでした。')
   } finally {
     busy.value = false
   }

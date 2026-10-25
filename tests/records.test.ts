@@ -7,6 +7,7 @@ import { renderToString } from '@vue/server-renderer'
 import { compile } from '@vue/compiler-ssr'
 import * as attendance from '../shared/utils/attendance.ts'
 import type { AttendanceRecord } from '../shared/utils/attendance.ts'
+import { apiErrorMessage } from '../app/utils/api-error.ts'
 
 const source = readFileSync(new URL('../app/pages/records.vue', import.meta.url), 'utf8')
 const script = stripTypeScriptTypes(
@@ -29,6 +30,7 @@ async function page(rows: AttendanceRecord[] = [record], post: Function = async 
   const dependencies = {
     ref,
     ...attendance,
+    apiErrorMessage,
     useRoute: () => ({ query: { month: '2026-09' } }),
     useRequestFetch: () => async () => ({ results: rows }),
     $fetch: post,

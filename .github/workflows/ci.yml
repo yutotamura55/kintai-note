@@ -24,8 +24,8 @@ jobs:
       - run: npx playwright install-deps chromium
       - run: npm run test:local
 
-  typecheck:
-    name: Type check
+  checks:
+    name: Static checks
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -35,8 +35,9 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
-      # Also fails when the compatibility date or flags changed without running npm run types:workers.
-      - run: npm run typecheck
+      # Prettier check, ESLint and type checking. The type check also fails when the compatibility
+      # date or flags changed without running npm run types:workers.
+      - run: npm run check
 
   terraform:
     name: Terraform validation
@@ -56,7 +57,7 @@ jobs:
 
   deploy:
     name: Deploy production
-    needs: [test, typecheck, terraform]
+    needs: [test, checks, terraform]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.PRODUCTION_DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
