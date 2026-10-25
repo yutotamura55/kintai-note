@@ -5,7 +5,7 @@ import { createRequire, stripTypeScriptTypes } from 'node:module'
 import { ref, computed, proxyRefs, createSSRApp } from 'vue'
 import { renderToString } from '@vue/server-renderer'
 import { compile } from '@vue/compiler-ssr'
-import { displayJapanDateTime, attendanceState, canPerform, calculateOriginalBreakMinutes, calculateOriginalWorkMinutes, formatDurationHuman } from '../shared/utils/attendance.ts'
+import { displayJapanDateTime, attendanceState, canPerform, calculateOriginalBreakMinutes, calculateOriginalWorkMinutes, formatDurationHuman, punchTimes } from '../shared/utils/attendance.ts'
 
 // Run the actual page script and template; replace only Nuxt/network/lifecycle boundaries.
 const source = readFileSync(new URL('../app/pages/dashboard.vue', import.meta.url), 'utf8')
@@ -16,7 +16,7 @@ async function page(api: Function, post: Function = async () => ({}), redirect: 
   const document = { visibilityState: 'visible', addEventListener: (event: string, callback: Function) => { lifecycle[`document:${event}`] = callback }, removeEventListener: () => {} }
   lifecycle.document = document
   const dependencies = { ref, computed, useRouter: () => ({ replace: redirect }), useRequestFetch: () => api,
-    $fetch: post, displayJapanDateTime, attendanceState, canPerform, calculateOriginalBreakMinutes, calculateOriginalWorkMinutes, formatDurationHuman,
+    $fetch: post, displayJapanDateTime, attendanceState, canPerform, calculateOriginalBreakMinutes, calculateOriginalWorkMinutes, formatDurationHuman, punchTimes,
     onMounted: (callback: Function) => { lifecycle.mounted = callback }, onUnmounted: (callback: Function) => { lifecycle.unmounted = callback },
     setInterval: (callback: Function, delay: number) => { lifecycle.intervalCalls = (lifecycle.intervalCalls || 0) + 1; lifecycle.intervalCallback = callback; lifecycle.intervalDelay = delay; return 1 }, clearInterval: () => {},
     window: { addEventListener: (event: string, callback: Function) => { lifecycle[`window:${event}`] = callback }, removeEventListener: () => {} },
@@ -252,4 +252,21 @@ test('dashboard uses original punch times after a manual edit', async () => {
   assert.match(html, /2026-09-18 18:00/)
   assert.doesNotMatch(html, /2026-09-18 09:00/)
   assert.doesNotMatch(html, /2026-09-18 17:00/)
+})
+
+test('a clock-out entered on the month page is not shown until the shift is really clocked out', async () => {
+  const prefilledToday = {
+    date: '2026-09-18', record: null,
+    openRecord: {
+      id: 'shift-a', work_date: '2026-09-18',
+      clock_in_at: '2026-09-18T00:00:00.000Z', clock_out_at: '2026-09-18T09:00:00.000Z',
+      original_clock_in_at: '2026-09-18T00:00:00.000Z', original_clock_out_at: null,
+      total_break_seconds: 0, original_total_break_seconds: 0, break_started_at: null,
+    },
+  }
+  const view = await page(async (path: string) => path === '/api/auth/me' ? { display_name: 'Test', role: 'member' } : prefilledToday)
+  const html = await view.html()
+  assert.equal(view.state.currentState, 'working')
+  assert.equal(view.state.punchRecord.clock_out_at, null)
+  assert.doesNotMatch(html, /2026-09-18 18:00/, 'The edited clock-out must not appear as the punched clock-out.')
 })
