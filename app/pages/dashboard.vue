@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { displayJapanDateTime, attendanceState, canPerform, calculateOriginalBreakMinutes, calculateOriginalWorkMinutes, formatDurationHuman } from '~~/shared/utils/attendance'
+import { displayJapanDateTime, attendanceState, canPerform, calculateOriginalBreakMinutes, calculateOriginalWorkMinutes, formatDurationHuman, punchTimes } from '~~/shared/utils/attendance'
 const router = useRouter(); const today = ref<any>(); const me = ref<any>(); const error = ref(''); const busy = ref(false)
 const loadError = ref(''); const loading = ref(false)
 const liveNow = ref(new Date())
@@ -10,11 +10,8 @@ const displayedRecord = computed(() => today.value?.openRecord || today.value?.r
 const punchRecord = computed(() => {
   const record = displayedRecord.value
   if (!record) return null
-  return {
-    ...record,
-    clock_in_at: record.original_clock_in_at ?? record.clock_in_at,
-    clock_out_at: record.original_clock_out_at ?? record.clock_out_at,
-  }
+  const punch = punchTimes(record)
+  return { ...record, clock_in_at: punch.clockInAt, clock_out_at: punch.clockOutAt }
 })
 const previousOpen = computed(() => today.value?.openRecord && today.value.openRecord.work_date !== today.value.date)
 const correctionLink = computed(() => ({ path: '/records', query: {

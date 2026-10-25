@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { workDateAt, japanDateTime, parseJapanDateTime, displayJapanDateTime,
   calculateBreakMinutes, calculateWorkMinutes, calculatePunchBreakMinutes, calculatePunchWorkMinutes,
   calculateOriginalBreakMinutes, calculateOriginalWorkMinutes,
-  formatDuration, formatDurationHuman, attendanceState, canPerform } from '../shared/utils/attendance.ts'
+  formatDuration, formatDurationHuman, attendanceState, canPerform, punchTimes } from '../shared/utils/attendance.ts'
 
 for (const [instant, expected] of [
   ['2026-09-17T00:00:00+09:00', '2026-09-16'],
@@ -184,4 +184,15 @@ test('formatDuration formats minutes cleanly', () => {
   assert.equal(formatDurationHuman(null), '—')
   assert.equal(formatDurationHuman(0), '0時間0分')
   assert.equal(formatDurationHuman(495), '8時間15分')
+})
+
+test('punch times trust tracked originals and fall back to editable values only for legacy rows', () => {
+  const base = { clock_in_at: 'edited-in', clock_out_at: 'edited-out', total_break_seconds: 60, original_total_break_seconds: 120 }
+  assert.deepEqual(punchTimes({ ...base, original_clock_in_at: 'in', original_clock_out_at: null }),
+    { clockInAt: 'in', clockOutAt: null, totalBreakSeconds: 120 })
+  assert.deepEqual(punchTimes({ ...base, original_clock_in_at: null, original_clock_out_at: null }),
+    { clockInAt: 'edited-in', clockOutAt: 'edited-out', totalBreakSeconds: 60 })
+  // An empty original clock-in keeps the earlier mixed rule: clock-in uses it, the rest falls back.
+  assert.deepEqual(punchTimes({ ...base, original_clock_in_at: '', original_clock_out_at: 'out' }),
+    { clockInAt: '', clockOutAt: 'edited-out', totalBreakSeconds: 60 })
 })
