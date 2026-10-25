@@ -5,10 +5,19 @@ import { currentUser } from '~~/server/utils/auth'
 import { db } from '~~/server/utils/db'
 import { japanDateTime, calculateBreakMinutes, calculateWorkMinutes, formatDuration } from '~~/shared/utils/attendance'
 export default defineEventHandler(async (event) => {
-  const user = await currentUser(event); const month = getQuery(event).month as string
-  if (!/^\d{4}-\d{2}$/.test(month || '')) throw createError({ statusCode: 400, statusMessage: 'month は YYYY-MM 形式で指定してください。' })
-  const rows = await db(event).prepare('SELECT work_date, clock_in_at, clock_out_at, break_started_at, total_break_seconds, break_minutes FROM attendance_records WHERE user_id=? AND work_date>=? AND work_date<? ORDER BY work_date').bind(user.id, `${month}-01`, `${month}-32`).all<any>()
-  const pdf = await PDFDocument.create(); const page = pdf.addPage([595, 842]); const font = await pdf.embedFont(StandardFonts.Helvetica)
+  const user = await currentUser(event)
+  const month = getQuery(event).month as string
+  if (!/^\d{4}-\d{2}$/.test(month || ''))
+    throw createError({ statusCode: 400, statusMessage: 'month は YYYY-MM 形式で指定してください。' })
+  const rows = await db(event)
+    .prepare(
+      'SELECT work_date, clock_in_at, clock_out_at, break_started_at, total_break_seconds, break_minutes FROM attendance_records WHERE user_id=? AND work_date>=? AND work_date<? ORDER BY work_date',
+    )
+    .bind(user.id, `${month}-01`, `${month}-32`)
+    .all<any>()
+  const pdf = await PDFDocument.create()
+  const page = pdf.addPage([595, 842])
+  const font = await pdf.embedFont(StandardFonts.Helvetica)
   // Load our deployed asset directly, without an external font CDN or host-header URL.
   const fontPath = '/fonts/NotoSansJP-Regular.ttf'
   const assets = (event.context.cloudflare?.env as Env | undefined)?.ASSETS
@@ -31,7 +40,7 @@ export default defineEventHandler(async (event) => {
     { text: 'Break', x: 385 },
     { text: 'Actual work', x: 475 },
   ]
-  headers.forEach(h => page.drawText(h.text, { x: h.x, y: 755, size: 10, font }))
+  headers.forEach((h) => page.drawText(h.text, { x: h.x, y: 755, size: 10, font }))
   const columnsX = [48, 135, 255, 385, 475]
   rows.results.forEach((r, index) => {
     const format = (value: string | null) => japanDateTime(value).replace('T', ' ') || '-'
@@ -42,6 +51,7 @@ export default defineEventHandler(async (event) => {
       page.drawText(text, { x: columnsX[col], y: 730 - index * 20, size: 9, font, color: rgb(0.12, 0.15, 0.2) })
     })
   })
-  setHeader(event, 'Content-Type', 'application/pdf'); setHeader(event, 'Content-Disposition', `attachment; filename="kintai-${month}.pdf"`)
+  setHeader(event, 'Content-Type', 'application/pdf')
+  setHeader(event, 'Content-Disposition', `attachment; filename="kintai-${month}.pdf"`)
   return await pdf.save()
 })

@@ -15,10 +15,16 @@ function run(command, args) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { cwd, stdio: 'pipe' })
     let output = ''
-    child.stdout.on('data', chunk => { output += chunk })
-    child.stderr.on('data', chunk => { output += chunk })
+    child.stdout.on('data', (chunk) => {
+      output += chunk
+    })
+    child.stderr.on('data', (chunk) => {
+      output += chunk
+    })
     child.on('error', reject)
-    child.on('exit', code => code === 0 ? resolve(output) : reject(new Error(`${command} ${args.join(' ')} failed:\n${output}`)))
+    child.on('exit', (code) =>
+      code === 0 ? resolve(output) : reject(new Error(`${command} ${args.join(' ')} failed:\n${output}`)),
+    )
   })
 }
 
@@ -29,7 +35,7 @@ async function waitForWorker() {
       const response = await fetch(`${baseUrl}/`, { signal: AbortSignal.timeout(1000) })
       if (response.ok) return
     } catch {}
-    await new Promise(resolve => setTimeout(resolve, 250))
+    await new Promise((resolve) => setTimeout(resolve, 250))
   }
   throw new Error('Local Worker did not start within 30 seconds.')
 }
@@ -57,17 +63,33 @@ try {
   await run(process.execPath, [wrangler, 'd1', 'migrations', 'apply', 'kintai-note', '--local'])
   await run(process.execPath, [wrangler, 'd1', 'migrations', 'apply', 'kintai-note', '--local'])
 
-  worker = spawn(process.execPath, [wrangler, 'dev', '--local', '--port', '8788'], { cwd, stdio: 'inherit', detached: process.platform !== 'win32' })
+  worker = spawn(process.execPath, [wrangler, 'dev', '--local', '--port', '8788'], {
+    cwd,
+    stdio: 'inherit',
+    detached: process.platform !== 'win32',
+  })
   await waitForWorker()
 
   const missingOriginal = await request('/api/attendance/restore', {
-    method: 'POST', body: JSON.stringify({ id: 'local-test-attendance-record' }),
+    method: 'POST',
+    body: JSON.stringify({ id: 'local-test-attendance-record' }),
   })
-  assert(missingOriginal.status === 409, `Expected restore without original times to return 409, received ${missingOriginal.status}.`)
+  assert(
+    missingOriginal.status === 409,
+    `Expected restore without original times to return 409, received ${missingOriginal.status}.`,
+  )
 
-  const preMigration = (await (await request('/api/attendance/month?month=2026-09')).json()).results.find(row => row.id === 'local-test-attendance-record')
-  assert(preMigration.original_clock_in_at === null && preMigration.original_clock_out_at === null, 'Migration must not backfill unknown original times.')
-  assert(preMigration.clock_in_at === '2026-09-16T00:00:00.000Z' && preMigration.clock_out_at === '2026-09-16T09:00:00.000Z', 'Migration must preserve existing times.')
+  const preMigration = (await (await request('/api/attendance/month?month=2026-09')).json()).results.find(
+    (row) => row.id === 'local-test-attendance-record',
+  )
+  assert(
+    preMigration.original_clock_in_at === null && preMigration.original_clock_out_at === null,
+    'Migration must not backfill unknown original times.',
+  )
+  assert(
+    preMigration.clock_in_at === '2026-09-16T00:00:00.000Z' && preMigration.clock_out_at === '2026-09-16T09:00:00.000Z',
+    'Migration must preserve existing times.',
+  )
 
   const update = await request('/api/attendance/record', {
     method: 'PUT',
@@ -77,7 +99,7 @@ try {
 
   const month = await request('/api/attendance/month?month=2026-09')
   const monthData = await month.json()
-  const record = monthData.results?.find(item => item.id === 'local-test-attendance-record')
+  const record = monthData.results?.find((item) => item.id === 'local-test-attendance-record')
   assert(record?.clock_in_at === '2026-09-16T00:15:00.000Z', 'The edited clock-in time was not saved as Japan time.')
   assert(record?.clock_out_at === '2026-09-16T09:30:00.000Z', 'The edited clock-out time was not saved as Japan time.')
 
@@ -88,28 +110,51 @@ try {
   assert(invalid.status === 400, `Expected invalid time order to be rejected with 400, received ${invalid.status}.`)
 
   const unauthorized = await fetch(`${baseUrl}/api/attendance/record`, {
-    method: 'PUT', headers: { 'content-type': 'application/json' },
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ id: 'local-test-attendance-record', clockIn: '09:15', clockOut: '18:30' }),
   })
-  assert(unauthorized.status === 401, `Expected unauthenticated edit to be rejected with 401, received ${unauthorized.status}.`)
+  assert(
+    unauthorized.status === 401,
+    `Expected unauthenticated edit to be rejected with 401, received ${unauthorized.status}.`,
+  )
 
   // Explicit calendar dates support overnight shifts and preserve the historical work date.
   const overnight = await request('/api/attendance/record', {
-    method: 'PUT', body: JSON.stringify({ id: record.id, clockIn: '2026-09-17T01:00', clockOut: '2026-09-17T05:00' }),
+    method: 'PUT',
+    body: JSON.stringify({ id: record.id, clockIn: '2026-09-17T01:00', clockOut: '2026-09-17T05:00' }),
   })
   assert(overnight.status === 200, 'Overnight edit failed.')
-  const edited = (await (await request('/api/attendance/month?month=2026-09')).json()).results.find(item => item.id === record.id)
+  const edited = (await (await request('/api/attendance/month?month=2026-09')).json()).results.find(
+    (item) => item.id === record.id,
+  )
   assert(edited.work_date === '2026-09-16', 'Editing changed the historical work date.')
-  assert(edited.clock_in_at === '2026-09-16T16:00:00.000Z' && edited.clock_out_at === '2026-09-16T20:00:00.000Z', 'Overnight calendar dates were lost.')
+  assert(
+    edited.clock_in_at === '2026-09-16T16:00:00.000Z' && edited.clock_out_at === '2026-09-16T20:00:00.000Z',
+    'Overnight calendar dates were lost.',
+  )
   for (const invalidTime of ['2026-02-30T05:00', '2026-09-17T24:00', {}]) {
-    const response = await request('/api/attendance/record', { method: 'PUT', body: JSON.stringify({ id: record.id, clockIn: invalidTime }) })
+    const response = await request('/api/attendance/record', {
+      method: 'PUT',
+      body: JSON.stringify({ id: record.id, clockIn: invalidTime }),
+    })
     assert(response.status === 400, 'Invalid datetime must return 400.')
   }
-  const notOwned = await request('/api/attendance/record', { method: 'PUT', body: JSON.stringify({ id: 'not-owned', clockIn: '2026-09-17T01:00' }) })
+  const notOwned = await request('/api/attendance/record', {
+    method: 'PUT',
+    body: JSON.stringify({ id: 'not-owned', clockIn: '2026-09-17T01:00' }),
+  })
   assert(notOwned.status === 404, 'Editing a record not owned by the user must fail.')
   // Reproduce #7 with a Japanese display name (the old Helvetica font throws).
-  await run(process.execPath, [wrangler, 'd1', 'execute', 'kintai-note', '--local', '--command',
-    "UPDATE users SET display_name='山田 太郎' WHERE id='local-test-attendance-user'"])
+  await run(process.execPath, [
+    wrangler,
+    'd1',
+    'execute',
+    'kintai-note',
+    '--local',
+    '--command',
+    "UPDATE users SET display_name='山田 太郎' WHERE id='local-test-attendance-user'",
+  ])
   const pdf = await request('/api/reports/month.pdf?month=2026-09')
   assert(pdf.status === 200 && pdf.headers.get('content-type')?.includes('application/pdf'), 'Monthly PDF failed.')
   const pdfBytes = new Uint8Array(await pdf.arrayBuffer())
@@ -118,47 +163,102 @@ try {
   try {
     const document = await pdfTask.promise
     const page = await document.getPage(1)
-    const text = (await page.getTextContent()).items.map(item => item.str || '').join(' ')
+    const text = (await page.getTextContent()).items.map((item) => item.str || '').join(' ')
     assert(text.includes('山田 太郎'), 'Downloaded PDF lost the Japanese display name.')
-    assert(text.includes('2026-09-17 01:00') && text.includes('2026-09-17 05:00'), 'Downloaded PDF lost Japan calendar dates.')
-  } finally { await pdfTask.destroy() }
+    assert(
+      text.includes('2026-09-17 01:00') && text.includes('2026-09-17 05:00'),
+      'Downloaded PDF lost Japan calendar dates.',
+    )
+  } finally {
+    await pdfTask.destroy()
+  }
 
   // Seed a pre-change unfinished shift; only the deterministic test fixture is modified.
-  await run(process.execPath, [wrangler, 'd1', 'execute', 'kintai-note', '--local', '--command',
-    "UPDATE attendance_records SET work_date='2000-12-31', clock_in_at='2000-12-31T16:00:00.000Z', clock_out_at=NULL WHERE id='local-test-attendance-record'"])
+  await run(process.execPath, [
+    wrangler,
+    'd1',
+    'execute',
+    'kintai-note',
+    '--local',
+    '--command',
+    "UPDATE attendance_records SET work_date='2000-12-31', clock_in_at='2000-12-31T16:00:00.000Z', clock_out_at=NULL WHERE id='local-test-attendance-record'",
+  ])
   const old = await (await request('/api/attendance/today')).json()
-  assert(old.openRecord?.id === record.id && old.openRecord.work_date === '2000-12-31', 'Previous unfinished shift not exposed on dashboard.')
+  assert(
+    old.openRecord?.id === record.id && old.openRecord.work_date === '2000-12-31',
+    'Previous unfinished shift not exposed on dashboard.',
+  )
   const dashboard = await request('/dashboard')
   assert(dashboard.headers.get('x-frame-options') === 'DENY', 'Dashboard can be framed by another site.')
-  assert(dashboard.headers.get('content-security-policy')?.includes("frame-ancestors 'none'"), 'Dashboard lacks a frame-ancestors policy.')
+  assert(
+    dashboard.headers.get('content-security-policy')?.includes("frame-ancestors 'none'"),
+    'Dashboard lacks a frame-ancestors policy.',
+  )
   assert(dashboard.headers.get('referrer-policy') === 'no-referrer', 'Invitation URLs may leak through referrers.')
   const dashboardHtml = await dashboard.text()
-  assert(dashboard.status === 200 && dashboardHtml.includes('前回の勤務が未退勤です') && dashboardHtml.includes('month=2000-12'), 'Dashboard must render unfinished notice and link to its month.')
+  assert(
+    dashboard.status === 200 &&
+      dashboardHtml.includes('前回の勤務が未退勤です') &&
+      dashboardHtml.includes('month=2000-12'),
+    'Dashboard must render unfinished notice and link to its month.',
+  )
   const correctionPage = await request(`/records?month=2000-12&edit=${record.id}`)
   const correctionHtml = await correctionPage.text()
-  assert(correctionPage.status === 200 && correctionHtml.includes('datetime-local') && correctionHtml.includes('2001-01-01T01:00'), 'Correction link must open the actual calendar datetime editor.')
-  const clock = (action, recordId) => request('/api/attendance/clock', { method: 'POST', body: JSON.stringify({ action, recordId }) })
+  assert(
+    correctionPage.status === 200 &&
+      correctionHtml.includes('datetime-local') &&
+      correctionHtml.includes('2001-01-01T01:00'),
+    'Correction link must open the actual calendar datetime editor.',
+  )
+  const clock = (action, recordId) =>
+    request('/api/attendance/clock', { method: 'POST', body: JSON.stringify({ action, recordId }) })
   assert((await clock('in')).status === 409, 'New shift must be blocked while a previous one is unfinished.')
-  assert((await clock('out', record.id)).status === 200, 'Clock-out must close the previous shift across the 4am boundary.')
-  const legacy = (await (await request('/api/attendance/month?month=2000-12')).json()).results.find(item => item.id === record.id)
-  assert(legacy.work_date === '2000-12-31' && legacy.clock_in_at === '2000-12-31T16:00:00.000Z' && legacy.clock_out_at, 'Legacy clock-out must preserve original work date and clock-in.')
+  assert(
+    (await clock('out', record.id)).status === 200,
+    'Clock-out must close the previous shift across the 4am boundary.',
+  )
+  const legacy = (await (await request('/api/attendance/month?month=2000-12')).json()).results.find(
+    (item) => item.id === record.id,
+  )
+  assert(
+    legacy.work_date === '2000-12-31' && legacy.clock_in_at === '2000-12-31T16:00:00.000Z' && legacy.clock_out_at,
+    'Legacy clock-out must preserve original work date and clock-in.',
+  )
   assert((await clock('out', record.id)).status === 409, 'Repeated clock-out must be rejected.')
 
   // Correcting a forgotten clock-out also unblocks the next shift.
-  const reopen = await request('/api/attendance/record', { method: 'PUT', body: JSON.stringify({ id: record.id, clockIn: '2001-01-01T01:00', clockOut: '' }) })
+  const reopen = await request('/api/attendance/record', {
+    method: 'PUT',
+    body: JSON.stringify({ id: record.id, clockIn: '2001-01-01T01:00', clockOut: '' }),
+  })
   assert(reopen.status === 200 && (await clock('in')).status === 409, 'Clearing clock-out must block new clock-in.')
-  const correct = await request('/api/attendance/record', { method: 'PUT', body: JSON.stringify({ id: record.id, clockIn: '2001-01-01T01:00', clockOut: '2001-01-01T05:00' }) })
+  const correct = await request('/api/attendance/record', {
+    method: 'PUT',
+    body: JSON.stringify({ id: record.id, clockIn: '2001-01-01T01:00', clockOut: '2001-01-01T05:00' }),
+  })
   assert(correct.status === 200, 'Forgotten overnight clock-out correction failed.')
   const concurrent = await Promise.all([clock('in'), clock('in')])
-  assert(concurrent.map(r => r.status).sort().join(',') === '200,409', 'Concurrent clock-ins must create exactly one shift.')
+  assert(
+    concurrent
+      .map((r) => r.status)
+      .sort()
+      .join(',') === '200,409',
+    'Concurrent clock-ins must create exactly one shift.',
+  )
   const current = await (await request('/api/attendance/today')).json()
-  assert(current.record?.work_date === current.date && current.openRecord?.id === current.record.id, 'New shift does not match current work date.')
+  assert(
+    current.record?.work_date === current.date && current.openRecord?.id === current.record.id,
+    'New shift does not match current work date.',
+  )
   assert((await clock('out', record.id)).status === 409, 'Stale clock-out must not close a newer shift.')
   assert((await clock('out')).status === 400, 'Clock-out without a record id must be rejected.')
   assert((await clock('out', 'not-owned')).status === 409, 'Clock-out must not fall back from an unknown record.')
   const stillOpen = await (await request('/api/attendance/today')).json()
   assert(stillOpen.openRecord?.id === current.record.id, 'Rejected requests changed the open shift.')
-  const anotherOpen = await request('/api/attendance/record', { method: 'PUT', body: JSON.stringify({ id: record.id, clockIn: '2001-01-01T01:00', clockOut: '' }) })
+  const anotherOpen = await request('/api/attendance/record', {
+    method: 'PUT',
+    body: JSON.stringify({ id: record.id, clockIn: '2001-01-01T01:00', clockOut: '' }),
+  })
   assert(anotherOpen.status === 409, 'Editing must not create a second unfinished shift.')
   assert((await clock('break_start', current.record.id)).status === 200, 'Break start failed.')
   assert((await clock('break_start', current.record.id)).status === 409, 'Duplicate break start must be rejected.')
@@ -167,58 +267,131 @@ try {
   assert((await clock('break_end', current.record.id)).status === 409, 'Duplicate break end must be rejected.')
   assert((await clock('out', current.record.id)).status === 200, 'Current shift clock-out failed.')
   assert((await clock('in')).status === 409, 'Completed shift must not be overwritten by clock-in.')
-  const noAuthClock = await fetch(`${baseUrl}/api/attendance/clock`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'in' }) })
+  const noAuthClock = await fetch(`${baseUrl}/api/attendance/clock`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ action: 'in' }),
+  })
   assert(noAuthClock.status === 401, 'Clock-in must require authentication.')
   await testOriginalTimes({ request, run, wrangler, current, legacyId: record.id })
 
   // Legacy data can contain several open shifts; reject out-of-order IDs without fallback.
   for (const sameTime of [false, true]) {
-    await run(process.execPath, [wrangler, 'd1', 'execute', 'kintai-note', '--local', '--command',
+    await run(process.execPath, [
+      wrangler,
+      'd1',
+      'execute',
+      'kintai-note',
+      '--local',
+      '--command',
       `INSERT INTO attendance_records (id, user_id, work_date, clock_in_at) VALUES
        ('local-test-oldest-a', 'local-test-attendance-user', '1999-01-01', '1999-01-01T00:00:00.000Z'),
-       ('local-test-oldest-b', 'local-test-attendance-user', '1999-01-02', '${sameTime ? '1999-01-01' : '1999-01-02'}T00:00:00.000Z')`])
-    assert((await clock('break_start', 'local-test-oldest-b')).status === 409, 'Newer legacy shift must not start a break before the oldest.')
-    assert((await clock('break_end', 'local-test-oldest-b')).status === 409, 'A rejected break start must not enable break end.')
-    assert((await clock('break_start', 'local-test-oldest-a')).status === 200, 'Oldest legacy shift must be able to start a break.')
-    assert((await clock('break_end', 'local-test-oldest-a')).status === 200, 'Oldest legacy shift must be able to end its break.')
-    assert((await clock('out', 'local-test-oldest-b')).status === 409, 'Newer legacy shift must not close before the oldest.')
+       ('local-test-oldest-b', 'local-test-attendance-user', '1999-01-02', '${sameTime ? '1999-01-01' : '1999-01-02'}T00:00:00.000Z')`,
+    ])
+    assert(
+      (await clock('break_start', 'local-test-oldest-b')).status === 409,
+      'Newer legacy shift must not start a break before the oldest.',
+    )
+    assert(
+      (await clock('break_end', 'local-test-oldest-b')).status === 409,
+      'A rejected break start must not enable break end.',
+    )
+    assert(
+      (await clock('break_start', 'local-test-oldest-a')).status === 200,
+      'Oldest legacy shift must be able to start a break.',
+    )
+    assert(
+      (await clock('break_end', 'local-test-oldest-a')).status === 200,
+      'Oldest legacy shift must be able to end its break.',
+    )
+    assert(
+      (await clock('out', 'local-test-oldest-b')).status === 409,
+      'Newer legacy shift must not close before the oldest.',
+    )
     const pending = (await (await request('/api/attendance/month?month=1999-01')).json()).results
-    assert(pending.length === 2 && pending.every(row => row.clock_out_at === null && row.break_started_at === null), 'Rejected out-of-order actions changed a record.')
+    assert(
+      pending.length === 2 && pending.every((row) => row.clock_out_at === null && row.break_started_at === null),
+      'Rejected out-of-order actions changed a record.',
+    )
     assert((await clock('out', 'local-test-oldest-a')).status === 200, 'Oldest legacy shift must close first.')
-    assert((await clock('out', 'local-test-oldest-a')).status === 409, 'Retry must not fall back to the next legacy shift.')
+    assert(
+      (await clock('out', 'local-test-oldest-a')).status === 409,
+      'Retry must not fall back to the next legacy shift.',
+    )
     assert((await clock('out', 'local-test-oldest-b')).status === 200, 'Next legacy shift must close after the oldest.')
-    await run(process.execPath, [wrangler, 'd1', 'execute', 'kintai-note', '--local', '--command',
-      "DELETE FROM attendance_records WHERE user_id='local-test-attendance-user' AND id IN ('local-test-oldest-a','local-test-oldest-b')"])
+    await run(process.execPath, [
+      wrangler,
+      'd1',
+      'execute',
+      'kintai-note',
+      '--local',
+      '--command',
+      "DELETE FROM attendance_records WHERE user_id='local-test-attendance-user' AND id IN ('local-test-oldest-a','local-test-oldest-b')",
+    ])
   }
 
   // Another real user (created by testOriginalTimes) must not punch this user's open shift.
   const ownedOpenId = 'local-test-owned-open'
-  await run(process.execPath, [wrangler, 'd1', 'execute', 'kintai-note', '--local', '--command',
+  await run(process.execPath, [
+    wrangler,
+    'd1',
+    'execute',
+    'kintai-note',
+    '--local',
+    '--command',
     `INSERT INTO attendance_records (id, user_id, work_date, clock_in_at, original_clock_in_at)
-     VALUES ('${ownedOpenId}', 'local-test-attendance-user', '1998-01-01', '1998-01-01T00:00:00.000Z', '1998-01-01T00:00:00.000Z')`])
-  const otherClock = (action, recordId) => request('/api/attendance/clock', {
-    method: 'POST', body: JSON.stringify({ action, recordId }), headers: { cookie: '__Host-kintai-session=local-test-other-session' },
-  })
-  const readOwnedOpen = async () => (await (await request('/api/attendance/month?month=1998-01')).json()).results.find(row => row.id === ownedOpenId)
+     VALUES ('${ownedOpenId}', 'local-test-attendance-user', '1998-01-01', '1998-01-01T00:00:00.000Z', '1998-01-01T00:00:00.000Z')`,
+  ])
+  const otherClock = (action, recordId) =>
+    request('/api/attendance/clock', {
+      method: 'POST',
+      body: JSON.stringify({ action, recordId }),
+      headers: { cookie: '__Host-kintai-session=local-test-other-session' },
+    })
+  const readOwnedOpen = async () =>
+    (await (await request('/api/attendance/month?month=1998-01')).json()).results.find((row) => row.id === ownedOpenId)
   const openBefore = await readOwnedOpen()
-  assert((await otherClock('break_start', ownedOpenId)).status === 409, "Another user's record ID must not start a break.")
+  assert(
+    (await otherClock('break_start', ownedOpenId)).status === 409,
+    "Another user's record ID must not start a break.",
+  )
   assert((await otherClock('out', ownedOpenId)).status === 409, "Another user's record ID must not clock out.")
   assert((await otherClock('break_start')).status === 400, 'A break without an ID must not fall back to another user.')
   const otherEdit = await request('/api/attendance/record', {
-    method: 'PUT', body: JSON.stringify({ id: ownedOpenId, clockIn: '1998-01-01T08:00', clockOut: '1998-01-01T17:00' }),
+    method: 'PUT',
+    body: JSON.stringify({ id: ownedOpenId, clockIn: '1998-01-01T08:00', clockOut: '1998-01-01T17:00' }),
     headers: { cookie: '__Host-kintai-session=local-test-other-session' },
   })
   assert(otherEdit.status === 404, "Another user's record ID must not be edited.")
-  assert(JSON.stringify(await readOwnedOpen()) === JSON.stringify(openBefore), "Rejected punches or edits changed another user's record.")
+  assert(
+    JSON.stringify(await readOwnedOpen()) === JSON.stringify(openBefore),
+    "Rejected punches or edits changed another user's record.",
+  )
   assert((await clock('break_start', ownedOpenId)).status === 200, 'Owner break start failed.')
   const onBreak = await readOwnedOpen()
   assert((await otherClock('break_end', ownedOpenId)).status === 409, "Another user's record ID must not end a break.")
   const otherOut = await otherClock('out', ownedOpenId)
-  assert(otherOut.status === 409 && !(await otherOut.text()).includes('休憩中のため'), "Clock-out must not reveal another user's break state.")
-  assert(JSON.stringify(await readOwnedOpen()) === JSON.stringify(onBreak), "Rejected punches changed another user's break.")
-  assert((await clock('break_end', ownedOpenId)).status === 200 && (await clock('out', ownedOpenId)).status === 200, 'Owner could not finish the shift.')
-  await run(process.execPath, [wrangler, 'd1', 'execute', 'kintai-note', '--local', '--command',
-    `DELETE FROM attendance_records WHERE id='${ownedOpenId}'`])
+  assert(
+    otherOut.status === 409 && !(await otherOut.text()).includes('休憩中のため'),
+    "Clock-out must not reveal another user's break state.",
+  )
+  assert(
+    JSON.stringify(await readOwnedOpen()) === JSON.stringify(onBreak),
+    "Rejected punches changed another user's break.",
+  )
+  assert(
+    (await clock('break_end', ownedOpenId)).status === 200 && (await clock('out', ownedOpenId)).status === 200,
+    'Owner could not finish the shift.',
+  )
+  await run(process.execPath, [
+    wrangler,
+    'd1',
+    'execute',
+    'kintai-note',
+    '--local',
+    '--command',
+    `DELETE FROM attendance_records WHERE id='${ownedOpenId}'`,
+  ])
   const logout = await request('/api/auth/logout', { method: 'POST' })
   assert(logout.status === 200, 'Logout failed.')
   const reusedSession = await request('/api/auth/me')
@@ -228,27 +401,49 @@ try {
   const verifyRateKey = createHash('sha256').update(`verification:${testVisitor}`).digest('hex')
   try {
     for (let attempt = 0; attempt < 10; attempt++) {
-      const options = await request('/api/auth/passkeys/login-options', { method: 'POST', headers: { 'cf-connecting-ip': testVisitor } })
+      const options = await request('/api/auth/passkeys/login-options', {
+        method: 'POST',
+        headers: { 'cf-connecting-ip': testVisitor },
+      })
       assert(options.status === 200, `Login options attempt ${attempt + 1} failed unexpectedly.`)
     }
-    const excessOptions = await request('/api/auth/passkeys/login-options', { method: 'POST', headers: { 'cf-connecting-ip': testVisitor } })
+    const excessOptions = await request('/api/auth/passkeys/login-options', {
+      method: 'POST',
+      headers: { 'cf-connecting-ip': testVisitor },
+    })
     assert(excessOptions.status === 429, 'Excess login option requests must be rate limited.')
     for (let attempt = 0; attempt < 20; attempt++) {
       const invalidVerification = await request('/api/auth/passkeys/login-verify', {
-        method: 'POST', headers: { 'cf-connecting-ip': testVisitor }, body: '{}',
+        method: 'POST',
+        headers: { 'cf-connecting-ip': testVisitor },
+        body: '{}',
       })
-      assert(invalidVerification.status === 400, `Invalid verification attempt ${attempt + 1} had an unexpected status.`)
+      assert(
+        invalidVerification.status === 400,
+        `Invalid verification attempt ${attempt + 1} had an unexpected status.`,
+      )
     }
     const excessVerification = await request('/api/auth/passkeys/login-verify', {
-      method: 'POST', headers: { 'cf-connecting-ip': testVisitor }, body: '{}',
+      method: 'POST',
+      headers: { 'cf-connecting-ip': testVisitor },
+      body: '{}',
     })
     assert(excessVerification.status === 429, 'Excess passkey verification requests must be rate limited.')
   } finally {
-    await run(process.execPath, [wrangler, 'd1', 'execute', 'kintai-note', '--local', '--command',
-      `DELETE FROM auth_rate_limits WHERE key IN ('${rateKey}', '${verifyRateKey}')`])
+    await run(process.execPath, [
+      wrangler,
+      'd1',
+      'execute',
+      'kintai-note',
+      '--local',
+      '--command',
+      `DELETE FROM auth_rate_limits WHERE key IN ('${rateKey}', '${verifyRateKey}')`,
+    ])
   }
   await testPasskeyFlow({ cwd, run, wrangler })
-  console.log('PASS: unit boundaries, attendance edits, overnight/legacy shifts, unfinished guards, concurrent clock-in, monthly PDF and authentication.')
+  console.log(
+    'PASS: unit boundaries, attendance edits, overnight/legacy shifts, unfinished guards, concurrent clock-in, monthly PDF and authentication.',
+  )
 } finally {
   if (worker?.pid && worker.exitCode === null) {
     const stopped = once(worker, 'exit')

@@ -53,8 +53,15 @@ export const ATTENDANCE_TRANSITIONS: Record<AttendanceState, Partial<Record<Atte
 // editable fields since there is no tracked punch history to trust instead.
 //
 // The server applies the same rule in SQL (OPEN_SHIFT_SQL and the edit UPDATE).
-type PunchFields = Pick<AttendanceRecord, 'clock_in_at' | 'clock_out_at' | 'original_clock_in_at' | 'original_clock_out_at'
-  | 'total_break_seconds' | 'original_total_break_seconds'>
+type PunchFields = Pick<
+  AttendanceRecord,
+  | 'clock_in_at'
+  | 'clock_out_at'
+  | 'original_clock_in_at'
+  | 'original_clock_out_at'
+  | 'total_break_seconds'
+  | 'original_total_break_seconds'
+>
 
 // Clock-in falls back only when the original is null or undefined, while clock-out and break
 // time follow whether a non-empty original clock-in exists; this keeps the earlier results.
@@ -86,7 +93,8 @@ export function japanDateTime(value: string | null | undefined): string {
 }
 
 export function displayJapanDateTime(value: string | null | undefined, includeSeconds = false): string {
-  if (value && includeSeconds) return new Date(new Date(value).getTime() + 9 * HOUR).toISOString().slice(0, 23).replace('T', ' ')
+  if (value && includeSeconds)
+    return new Date(new Date(value).getTime() + 9 * HOUR).toISOString().slice(0, 23).replace('T', ' ')
   return japanDateTime(value).replace('T', ' ') || '—'
 }
 
@@ -124,7 +132,10 @@ export function calculatePunchBreakMinutes(record: AttendanceRecord, now: Date =
 
 export function calculateWorkMinutes(record: AttendanceRecord, now: Date = new Date()): number {
   if (record.break_minutes !== null && record.break_minutes !== undefined) {
-    return Math.max(0, calculatePunchWorkMinutes(record, now) + calculatePunchBreakMinutes(record, now) - record.break_minutes)
+    return Math.max(
+      0,
+      calculatePunchWorkMinutes(record, now) + calculatePunchBreakMinutes(record, now) - record.break_minutes,
+    )
   }
   return calculatePunchWorkMinutes(record, now)
 }
@@ -134,12 +145,15 @@ export function calculatePunchWorkMinutes(record: AttendanceRecord, now: Date = 
   const start = new Date(record.clock_in_at).getTime()
   const end = record.clock_out_at
     ? new Date(record.clock_out_at).getTime()
-    : (record.break_started_at ? new Date(record.break_started_at).getTime() : now.getTime())
+    : record.break_started_at
+      ? new Date(record.break_started_at).getTime()
+      : now.getTime()
   if (end <= start) return 0
   const grossMinutes = Math.floor((end - start) / (60 * 1000))
-  const breakMinutes = record.break_started_at && !record.clock_out_at
-    ? Math.floor((record.total_break_seconds || 0) / 60)
-    : calculatePunchBreakMinutes(record, now)
+  const breakMinutes =
+    record.break_started_at && !record.clock_out_at
+      ? Math.floor((record.total_break_seconds || 0) / 60)
+      : calculatePunchBreakMinutes(record, now)
   return Math.max(0, grossMinutes - breakMinutes)
 }
 
@@ -160,7 +174,9 @@ export function calculateOriginalWorkMinutes(record: AttendanceRecord, now: Date
   const start = new Date(punch.clockInAt).getTime()
   const end = punch.clockOutAt
     ? new Date(punch.clockOutAt).getTime()
-    : (record.break_started_at ? new Date(record.break_started_at).getTime() : now.getTime())
+    : record.break_started_at
+      ? new Date(record.break_started_at).getTime()
+      : now.getTime()
   if (end <= start) return 0
   const grossMinutes = Math.floor((end - start) / (60 * 1000))
   const breakMinutes = record.break_started_at

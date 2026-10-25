@@ -19,7 +19,11 @@ export type AttendanceEditResult = { ok: true } | Failed
 const saved: AttendanceEditResult = { ok: true }
 const failed = (reason: AttendanceEditFailure): Failed => ({ ok: false, reason })
 
-export async function findOwnedAttendance(repository: AttendanceRepository, userId: string, recordId: unknown): Promise<OwnedAttendanceResult> {
+export async function findOwnedAttendance(
+  repository: AttendanceRepository,
+  userId: string,
+  recordId: unknown,
+): Promise<OwnedAttendanceResult> {
   if (typeof recordId !== 'string' || !recordId.trim()) return failed('record_id_missing')
   const record = await repository.findOwned(userId, recordId)
   return record ? { ok: true, record } : failed('record_not_found')
@@ -32,11 +36,16 @@ export function resolveBreakMinutes(
   now: Date = new Date(),
 ): number | null {
   if (!record.break_started_at) {
-    return record.break_minutes === null && requested === Math.floor((record.total_break_seconds || 0) / 60) ? null : requested
+    return record.break_minutes === null && requested === Math.floor((record.total_break_seconds || 0) / 60)
+      ? null
+      : requested
   }
   const start = new Date(record.break_started_at).getTime()
   const end = clockOutAt ? new Date(clockOutAt).getTime() : now.getTime()
-  const punchMinutes = Math.max(0, Math.floor(((record.total_break_seconds || 0) * 1000 + Math.max(0, end - start)) / 60000))
+  const punchMinutes = Math.max(
+    0,
+    Math.floor(((record.total_break_seconds || 0) * 1000 + Math.max(0, end - start)) / 60000),
+  )
   return record.break_minutes === null && requested === punchMinutes ? null : requested
 }
 
@@ -87,7 +96,8 @@ export async function editAttendanceTimes(
   requestedBreak: unknown,
   instant: Date,
 ): Promise<AttendanceEditResult> {
-  if (record.break_started_at && clockOutAt && clockOutAt < record.break_started_at) return failed('clock_out_before_break_start')
+  if (record.break_started_at && clockOutAt && clockOutAt < record.break_started_at)
+    return failed('clock_out_before_break_start')
   let breakMinutes: number | null | undefined = undefined
   if (requestedBreak === null || requestedBreak === '') {
     breakMinutes = null
@@ -99,14 +109,25 @@ export async function editAttendanceTimes(
   return saveAttendanceTimes(repository, userId, record, clockInAt, clockOutAt, breakMinutes, instant)
 }
 
-export async function restoreAttendanceTimes(repository: AttendanceRepository, userId: string, recordId: unknown, instant: Date): Promise<AttendanceEditResult> {
+export async function restoreAttendanceTimes(
+  repository: AttendanceRepository,
+  userId: string,
+  recordId: unknown,
+  instant: Date,
+): Promise<AttendanceEditResult> {
   const owned = await findOwnedAttendance(repository, userId, recordId)
   if (!owned.ok) return owned
   const { record } = owned
-  if (!record.original_clock_in_at && !record.original_clock_out_at && record.break_minutes === null) return failed('no_original_times')
+  if (!record.original_clock_in_at && !record.original_clock_out_at && record.break_minutes === null)
+    return failed('no_original_times')
   // Only use trusted stored originals. Unknown fields keep their current value.
-  return saveAttendanceTimes(repository, userId, record,
+  return saveAttendanceTimes(
+    repository,
+    userId,
+    record,
     record.original_clock_in_at ?? record.clock_in_at,
     record.original_clock_out_at ?? record.clock_out_at,
-    null, instant)
+    null,
+    instant,
+  )
 }

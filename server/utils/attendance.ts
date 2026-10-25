@@ -13,7 +13,12 @@ export const OPEN_SHIFT_ORDER_SQL = `${EFFECTIVE_CLOCK_IN_SQL}, id`
 
 export function openAttendance(database: D1Database, userId: string) {
   // Old data may contain multiple unfinished records; resolve oldest first.
-  return database.prepare(`SELECT * FROM attendance_records
+  return database
+    .prepare(
+      `SELECT * FROM attendance_records
     WHERE user_id=? AND ${OPEN_SHIFT_SQL}
-    ORDER BY ${OPEN_SHIFT_ORDER_SQL} LIMIT 1`).bind(userId).first<AttendanceRecord>()
+    ORDER BY ${OPEN_SHIFT_ORDER_SQL} LIMIT 1`,
+    )
+    .bind(userId)
+    .first<AttendanceRecord>()
 }
