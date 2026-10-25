@@ -10,18 +10,28 @@ for (const legacy of [false, true]) {
     try {
       const baseline = readFileSync(new URL('../db/schema.sql', import.meta.url), 'utf8')
       db.exec(baseline)
-      if (legacy) db.exec(`INSERT INTO users (id,employee_code,display_name) VALUES ('u','u','U');
+      if (legacy)
+        db.exec(`INSERT INTO users (id,employee_code,display_name) VALUES ('u','u','U');
         INSERT INTO attendance_records (id,user_id,work_date,clock_in_at,clock_out_at)
         VALUES ('a','u','2026-09-19','2026-09-19T00:00:12.345Z','2026-09-19T09:00:45.678Z')`)
       // The production setup reapplies the baseline before pending migrations.
       db.exec(baseline)
-      for (const file of readdirSync(new URL('../migrations/', import.meta.url)).filter(name => name.endsWith('.sql')).sort()) {
+      for (const file of readdirSync(new URL('../migrations/', import.meta.url))
+        .filter((name) => name.endsWith('.sql'))
+        .sort()) {
         db.exec(readFileSync(new URL(`../migrations/${file}`, import.meta.url), 'utf8'))
       }
-      const columns = db.prepare('PRAGMA table_info(attendance_records)').all().map(row => row.name)
+      const columns = db
+        .prepare('PRAGMA table_info(attendance_records)')
+        .all()
+        .map((row) => row.name)
       assert.ok(columns.includes('original_clock_in_at') && columns.includes('original_clock_out_at'))
-      assert.ok(columns.includes('break_started_at') && columns.includes('total_break_seconds')
-        && columns.includes('original_total_break_seconds') && columns.includes('break_minutes'))
+      assert.ok(
+        columns.includes('break_started_at') &&
+          columns.includes('total_break_seconds') &&
+          columns.includes('original_total_break_seconds') &&
+          columns.includes('break_minutes'),
+      )
       if (legacy) {
         const row = db.prepare('SELECT * FROM attendance_records WHERE id=?').get('a')!
         assert.equal(row.original_clock_in_at, null)
@@ -34,6 +44,8 @@ for (const legacy of [false, true]) {
         assert.equal(row.clock_out_at, '2026-09-19T09:00:45.678Z')
         assert.equal(row.work_date, '2026-09-19')
       }
-    } finally { db.close() }
+    } finally {
+      db.close()
+    }
   })
 }

@@ -9,19 +9,43 @@ import * as attendance from '../shared/utils/attendance.ts'
 import type { AttendanceRecord } from '../shared/utils/attendance.ts'
 
 const source = readFileSync(new URL('../app/pages/records.vue', import.meta.url), 'utf8')
-const script = stripTypeScriptTypes(source.match(/<script setup lang="ts">([\s\S]*?)<\/script>/)![1].replace(/^import [\s\S]*? from '[^']*'\n/gm, ''))
-const render = new Function('require', compile(source.match(/<template>([\s\S]*)<\/template>/)![1], { mode: 'function' }).code)(createRequire(import.meta.url))
+const script = stripTypeScriptTypes(
+  source.match(/<script setup lang="ts">([\s\S]*?)<\/script>/)![1].replace(/^import [\s\S]*? from '[^']*'\n/gm, ''),
+)
+const render = new Function(
+  'require',
+  compile(source.match(/<template>([\s\S]*)<\/template>/)![1], { mode: 'function' }).code,
+)(createRequire(import.meta.url))
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor
-const record = { id: 'shift', work_date: '2026-09-19', clock_in_at: '2026-09-19T01:00:00.000Z', clock_out_at: '2026-09-19T09:00:00.000Z', original_clock_in_at: '2026-09-19T00:00:12.345Z', original_clock_out_at: null }
+const record = {
+  id: 'shift',
+  work_date: '2026-09-19',
+  clock_in_at: '2026-09-19T01:00:00.000Z',
+  clock_out_at: '2026-09-19T09:00:00.000Z',
+  original_clock_in_at: '2026-09-19T00:00:12.345Z',
+  original_clock_out_at: null,
+}
 async function page(rows: AttendanceRecord[] = [record], post: Function = async () => ({})) {
-  const dependencies = { ref, ...attendance, useRoute: () => ({ query: { month: '2026-09' } }),
-    useRequestFetch: () => async () => ({ results: rows }), $fetch: post, watch: () => {} }
-  const state = await new AsyncFunction(...Object.keys(dependencies), `${script}\nreturn { month, records, error, editing, draft, saving, edit, cancel, save, pdf, displayJapanDateTime, calculateBreakMinutes, calculateWorkMinutes, formatDuration, restoreTargetLabel, ...(typeof restore !== 'undefined' ? {restore} : {}), ...(typeof canRestore !== 'undefined' ? {canRestore} : {}) }`)(...Object.values(dependencies))
-  return { state: proxyRefs(state), html: () => {
-    const app = createSSRApp({ setup: () => state, ssrRender: render })
-    app.component('NuxtLink', { template: '<a><slot /></a>' })
-    return renderToString(app)
-  } }
+  const dependencies = {
+    ref,
+    ...attendance,
+    useRoute: () => ({ query: { month: '2026-09' } }),
+    useRequestFetch: () => async () => ({ results: rows }),
+    $fetch: post,
+    watch: () => {},
+  }
+  const state = await new AsyncFunction(
+    ...Object.keys(dependencies),
+    `${script}\nreturn { month, records, error, editing, draft, saving, edit, cancel, save, pdf, displayJapanDateTime, calculateBreakMinutes, calculateWorkMinutes, formatDuration, restoreTargetLabel, ...(typeof restore !== 'undefined' ? {restore} : {}), ...(typeof canRestore !== 'undefined' ? {canRestore} : {}) }`,
+  )(...Object.values(dependencies))
+  return {
+    state: proxyRefs(state),
+    html: () => {
+      const app = createSSRApp({ setup: () => state, ssrRender: render })
+      app.component('NuxtLink', { template: '<a><slot /></a>' })
+      return renderToString(app)
+    },
+  }
 }
 test('records expose the original time and only available restore targets', async () => {
   const view = await page()
@@ -50,7 +74,9 @@ test('restore sends only the record ID and reloads saved times', async () => {
   assert.equal(view.state.saving, false)
 })
 test('failed restore displays the server error and preserves the record', async () => {
-  const view = await page([record], async () => { throw { data: { statusMessage: '退勤時刻は出勤時刻より後にしてください。' } } })
+  const view = await page([record], async () => {
+    throw { data: { statusMessage: '退勤時刻は出勤時刻より後にしてください。' } }
+  })
   await view.state.restore(record)
   assert.match(await view.html(), /退勤時刻は出勤時刻より後/)
   assert.equal(view.state.records[0].clock_in_at, record.clock_in_at)
@@ -58,10 +84,20 @@ test('failed restore displays the server error and preserves the record', async 
 })
 test('restore disables mutations while saving', async () => {
   let release!: () => void
-  const view = await page([record], () => new Promise<void>(resolve => { release = resolve }))
+  const view = await page(
+    [record],
+    () =>
+      new Promise<void>((resolve) => {
+        release = resolve
+      }),
+  )
   const pending = view.state.restore(record)
-  try { assert.match(await view.html(), /<button[^>]*disabled[^>]*>\s*元の打刻時刻に戻す/) }
-  finally { release(); await pending }
+  try {
+    assert.match(await view.html(), /<button[^>]*disabled[^>]*>\s*元の打刻時刻に戻す/)
+  } finally {
+    release()
+    await pending
+  }
 })
 
 test('already restored records disable restoration even when originals are present', async () => {
