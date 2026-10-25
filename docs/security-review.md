@@ -11,7 +11,13 @@ PR #32 は 2026-10-24 に `main` へマージされ、同日の本番デプロ�
 | `GET /`、`GET /login` | `Strict-Transport-Security: max-age=31536000`、`Content-Security-Policy: frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'`、`X-Frame-Options: DENY`、`X-Content-Type-Options: nosniff`、`Referrer-Policy: no-referrer`、`Permissions-Policy: camera=(), microphone=(), geolocation=()` が付く |
 | Cookie なしの `GET /api/auth/me` | 401（「ログインが必要です。」） |
 
-認証オプションの発行と回数制限は、本番の D1 に challenge や回数の行を書き込むため、本番では試していません。ログアウト後のセッションの拒否、challenge の一度限りの消費、初回管理者の同時作成の防止、回数制限、招待 URL の一度限りの使用は、単体テストとローカルの Worker + D1 の統合テストで確かめています。パスキーの登録・ログイン、ログアウト、無効化した利用者のセッションの拒否は、仮想のパスキー端末を使う画面テスト（`scripts/test-passkey-flow.mjs`）でも確かめています。
+認証オプションの発行と回数制限は、本番の D1 に challenge や回数の行を書き込むため、本番では試していません。認証の動作は、次のテストで確かめています。
+
+| 確かめていること | テスト |
+| --- | --- |
+| ログアウト後に同じセッション Cookie が使えない、回数の上限を超えると 429 になる | ローカルの Worker + D1 の統合テスト（`scripts/test-local.mjs`） |
+| challenge を一度しか使えない、初回管理者の同時作成で 1 人しか作られない、回数の記録が上限を超えて増えない、招待の同時使用でパスキーが 1 つしか登録されない | SQLite を使う単体テスト（`tests/auth-repository.test.ts`、`tests/invitation.test.ts`） |
+| パスキーの登録とログイン、使用済みの招待 URL の拒否、2 回目の初期設定の拒否（同時ではなく順に送った場合）、無効化した利用者のセッションとログインの拒否 | 仮想のパスキー端末を使う画面テスト（`scripts/test-passkey-flow.mjs`） |
 
 Cloudflare の WAF カスタムルールとレート制限ルールは、ゾーン（自分のドメイン）単位の機能で、`workers.dev` には設定できません（[WAF のフェーズと範囲](https://developers.cloudflare.com/waf/reference/phases/)、[workers.dev](https://developers.cloudflare.com/workers/configuration/routing/workers-dev/)）。そのため、下の「2026-10-23 の対応状況」で未確認としていた WAF・Rate Limiting は、今の構成では使えないと分かりました。今の守りはアプリ側の接続元ごとの回数制限だけで、接続元を分散した大量の要求は防げません。
 
