@@ -3,7 +3,14 @@ import fontkit from '@pdf-lib/fontkit'
 import type { Env } from '~~/server/utils/types'
 import { currentUser } from '~~/server/utils/auth'
 import { db } from '~~/server/utils/db'
-import { japanDateTime, calculateBreakMinutes, calculateWorkMinutes, formatDuration } from '~~/shared/utils/attendance'
+import {
+  japanDateTime,
+  calculateBreakMinutes,
+  calculateWorkMinutes,
+  formatDuration,
+  type AttendanceRecord,
+  type DurationFields,
+} from '~~/shared/utils/attendance'
 export default defineEventHandler(async (event) => {
   const user = await currentUser(event)
   const month = getQuery(event).month as string
@@ -14,7 +21,7 @@ export default defineEventHandler(async (event) => {
       'SELECT work_date, clock_in_at, clock_out_at, break_started_at, total_break_seconds, break_minutes FROM attendance_records WHERE user_id=? AND work_date>=? AND work_date<? ORDER BY work_date',
     )
     .bind(user.id, `${month}-01`, `${month}-32`)
-    .all<any>()
+    .all<DurationFields & Pick<AttendanceRecord, 'work_date'>>()
   const pdf = await PDFDocument.create()
   const page = pdf.addPage([595, 842])
   const font = await pdf.embedFont(StandardFonts.Helvetica)

@@ -19,7 +19,7 @@ const draft = ref({ clockIn: '', clockOut: '', breakMinutes: 0 as number | strin
 const saving = ref(false)
 const error = ref('')
 async function load() {
-  const data = await api<any>('/api/attendance/month', { query: { month: month.value } })
+  const data = await api<{ results: AttendanceRecord[] }>('/api/attendance/month', { query: { month: month.value } })
   records.value = data.results
 }
 function pdf() {
@@ -56,8 +56,8 @@ async function save(record: AttendanceRecord) {
     })
     await load()
     editing.value = null
-  } catch (cause: any) {
-    error.value = cause?.data?.statusMessage || '記録を更新できませんでした。'
+  } catch (cause) {
+    error.value = apiErrorMessage(cause, '記録を更新できませんでした。')
   } finally {
     saving.value = false
   }
@@ -85,8 +85,8 @@ async function restore(record: AttendanceRecord) {
     await $fetch('/api/attendance/restore', { method: 'POST', body: { id: record.id } })
     await load()
     editing.value = null
-  } catch (cause: any) {
-    error.value = cause?.data?.statusMessage || '元の打刻時刻に戻せませんでした。'
+  } catch (cause) {
+    error.value = apiErrorMessage(cause, '元の打刻時刻に戻せませんでした。')
   } finally {
     saving.value = false
   }
@@ -123,7 +123,7 @@ watch(month, async () => {
             <th>退勤日時（日本時間）</th>
             <th>休憩時間</th>
             <th>実労働時間</th>
-            <th></th>
+            <th />
           </tr>
         </thead>
         <tbody>

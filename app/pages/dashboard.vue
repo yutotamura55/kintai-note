@@ -7,10 +7,12 @@ import {
   calculateOriginalWorkMinutes,
   formatDurationHuman,
   punchTimes,
+  type AttendanceRecord,
 } from '~~/shared/utils/attendance'
 const router = useRouter()
-const today = ref<any>()
-const me = ref<any>()
+// Responses of /api/attendance/today and /api/auth/me.
+const today = ref<{ date: string; record: AttendanceRecord | null; openRecord: AttendanceRecord | null }>()
+const me = ref<{ display_name: string; role: string }>()
 const error = ref('')
 const busy = ref(false)
 const loadError = ref('')
@@ -55,8 +57,9 @@ async function load() {
     try {
       ;[me.value, today.value] = await Promise.all([api('/api/auth/me'), api('/api/attendance/today')])
       loadError.value = ''
-    } catch (cause: any) {
-      if (cause?.statusCode === 401 || cause?.response?.status === 401) await router.replace('/login')
+    } catch (cause) {
+      const failure = cause as ApiFailure | undefined
+      if (failure?.statusCode === 401 || failure?.response?.status === 401) await router.replace('/login')
       else loadError.value = '記録を取得できませんでした。再試行してください。'
     } finally {
       loading.value = false
@@ -77,8 +80,8 @@ async function clock(action: 'in' | 'out' | 'break_start' | 'break_end') {
       body: { action, ...(action !== 'in' ? { recordId: targetRecordId } : {}) },
     })
     await load()
-  } catch (cause: any) {
-    error.value = cause?.data?.statusMessage || '打刻に失敗しました。'
+  } catch (cause) {
+    error.value = apiErrorMessage(cause, '打刻に失敗しました。')
     await load()
   } finally {
     busy.value = false
@@ -129,7 +132,7 @@ onUnmounted(() => {
         <p>勤務日は日本時間の午前4時に切り替わります。</p>
         <div v-if="previousOpen" class="attendance-warning" role="status">
           <p>
-            <strong>前回の勤務が未退勤です（勤務日：{{ today.openRecord.work_date }}）。</strong>
+            <strong>前回の勤務が未退勤です（勤務日：{{ today.openRecord?.work_date }}）。</strong>
           </p>
           <p>
             今まで勤務していた場合は「退勤を記録」を押してください。打刻を忘れていた場合は、実際の退勤日時を入力してください。
@@ -166,27 +169,27 @@ onUnmounted(() => {
             <button
               class="clock-action primary"
               :disabled="busy || !canPerform(currentState, 'in')"
-              @click="clock('in')"
               aria-label="出勤を記録"
               data-icon="▶"
+              @click="clock('in')"
             >
               出勤を記録
             </button>
             <button
               class="clock-action break-action"
               :disabled="busy || !canPerform(currentState, isOnBreak ? 'break_end' : 'break_start')"
-              @click="clock(isOnBreak ? 'break_end' : 'break_start')"
               :aria-label="isOnBreak ? '休憩終了を記録' : '休憩開始を記録'"
               :data-icon="isOnBreak ? '⏸' : '⏱'"
+              @click="clock(isOnBreak ? 'break_end' : 'break_start')"
             >
               {{ isOnBreak ? '休憩終了を記録' : '休憩開始を記録' }}
             </button>
             <button
               class="clock-action danger"
               :disabled="busy || !canPerform(currentState, 'out')"
-              @click="clock('out')"
               aria-label="退勤を記録"
               data-icon="■"
+              @click="clock('out')"
             >
               退勤を記録
             </button>

@@ -12,8 +12,8 @@ async function login() {
     const response = await startAuthentication({ optionsJSON: options })
     await $fetch('/api/auth/passkeys/login-verify', { method: 'POST', body: response })
     await navigateTo('/dashboard')
-  } catch (cause: any) {
-    error.value = cause?.data?.statusMessage || 'ログインできませんでした。'
+  } catch (cause) {
+    error.value = apiErrorMessage(cause, 'ログインできませんでした。')
   } finally {
     busy.value = false
   }

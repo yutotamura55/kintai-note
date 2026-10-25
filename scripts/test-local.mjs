@@ -34,7 +34,9 @@ async function waitForWorker() {
     try {
       const response = await fetch(`${baseUrl}/`, { signal: AbortSignal.timeout(1000) })
       if (response.ok) return
-    } catch {}
+    } catch {
+      // The Worker is not listening yet; try again below.
+    }
     await new Promise((resolve) => setTimeout(resolve, 250))
   }
   throw new Error('Local Worker did not start within 30 seconds.')
