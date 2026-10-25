@@ -80,19 +80,34 @@ const UPDATE_SQL = { break_start: BREAK_START_SQL, break_end: BREAK_END_SQL, out
 
 export function d1AttendanceRepository(database: D1Database): AttendanceRepository {
   return {
-    findOldestOpen: userId => openAttendance(database, userId),
-    findOwned: (userId, recordId) => database.prepare('SELECT * FROM attendance_records WHERE id=? AND user_id=?')
-      .bind(recordId, userId).first<AttendanceRecord>(),
+    findOldestOpen: (userId) => openAttendance(database, userId),
+    findOwned: (userId, recordId) =>
+      database
+        .prepare('SELECT * FROM attendance_records WHERE id=? AND user_id=?')
+        .bind(recordId, userId)
+        .first<AttendanceRecord>(),
     async applyPunch(command) {
-      const statement = command.action === 'in'
-        ? database.prepare(CLOCK_IN_SQL).bind(id(), command.userId, command.workDate, command.atIso)
-        : database.prepare(UPDATE_SQL[command.action]).bind(command.atIso, command.recordId, command.userId)
+      const statement =
+        command.action === 'in'
+          ? database.prepare(CLOCK_IN_SQL).bind(id(), command.userId, command.workDate, command.atIso)
+          : database.prepare(UPDATE_SQL[command.action]).bind(command.atIso, command.recordId, command.userId)
       const result = await statement.run()
       return result.meta.changes ? 'applied' : 'unchanged'
     },
     async saveTimes(command) {
-      const result = await database.prepare(SAVE_TIMES_SQL).bind(command.clockInAt, command.clockOutAt, command.breakMinutes, command.atIso,
-        command.recordId, command.userId, command.expectedClockInAt, command.expectedClockOutAt).run()
+      const result = await database
+        .prepare(SAVE_TIMES_SQL)
+        .bind(
+          command.clockInAt,
+          command.clockOutAt,
+          command.breakMinutes,
+          command.atIso,
+          command.recordId,
+          command.userId,
+          command.expectedClockInAt,
+          command.expectedClockOutAt,
+        )
+        .run()
       return result.meta.changes ? 'saved' : 'conflict'
     },
   }

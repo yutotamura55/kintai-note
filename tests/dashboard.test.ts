@@ -5,41 +5,108 @@ import { createRequire, stripTypeScriptTypes } from 'node:module'
 import { ref, computed, proxyRefs, createSSRApp } from 'vue'
 import { renderToString } from '@vue/server-renderer'
 import { compile } from '@vue/compiler-ssr'
-import { displayJapanDateTime, attendanceState, canPerform, calculateOriginalBreakMinutes, calculateOriginalWorkMinutes, formatDurationHuman, punchTimes } from '../shared/utils/attendance.ts'
+import {
+  displayJapanDateTime,
+  attendanceState,
+  canPerform,
+  calculateOriginalBreakMinutes,
+  calculateOriginalWorkMinutes,
+  formatDurationHuman,
+  punchTimes,
+} from '../shared/utils/attendance.ts'
 
 // Run the actual page script and template; replace only Nuxt/network/lifecycle boundaries.
 const source = readFileSync(new URL('../app/pages/dashboard.vue', import.meta.url), 'utf8')
-const script = stripTypeScriptTypes(source.match(/<script setup lang="ts">([\s\S]*?)<\/script>/)![1].replace(/^import .*\n/gm, ''))
-const render = new Function('require', compile(source.match(/<template>([\s\S]*)<\/template>/)![1], { mode: 'function' }).code)(createRequire(import.meta.url))
+const script = stripTypeScriptTypes(
+  source.match(/<script setup lang="ts">([\s\S]*?)<\/script>/)![1].replace(/^import [\s\S]*? from '[^']*'\n/gm, ''),
+)
+const render = new Function(
+  'require',
+  compile(source.match(/<template>([\s\S]*)<\/template>/)![1], { mode: 'function' }).code,
+)(createRequire(import.meta.url))
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor
-async function page(api: Function, post: Function = async () => ({}), redirect: Function = async () => {}, lifecycle: Record<string, any> = {}) {
-  const document = { visibilityState: 'visible', addEventListener: (event: string, callback: Function) => { lifecycle[`document:${event}`] = callback }, removeEventListener: () => {} }
+async function page(
+  api: Function,
+  post: Function = async () => ({}),
+  redirect: Function = async () => {},
+  lifecycle: Record<string, any> = {},
+) {
+  const document = {
+    visibilityState: 'visible',
+    addEventListener: (event: string, callback: Function) => {
+      lifecycle[`document:${event}`] = callback
+    },
+    removeEventListener: () => {},
+  }
   lifecycle.document = document
-  const dependencies = { ref, computed, useRouter: () => ({ replace: redirect }), useRequestFetch: () => api,
-    $fetch: post, displayJapanDateTime, attendanceState, canPerform, calculateOriginalBreakMinutes, calculateOriginalWorkMinutes, formatDurationHuman, punchTimes,
-    onMounted: (callback: Function) => { lifecycle.mounted = callback }, onUnmounted: (callback: Function) => { lifecycle.unmounted = callback },
-    setInterval: (callback: Function, delay: number) => { lifecycle.intervalCalls = (lifecycle.intervalCalls || 0) + 1; lifecycle.intervalCallback = callback; lifecycle.intervalDelay = delay; return 1 }, clearInterval: () => {},
-    window: { addEventListener: (event: string, callback: Function) => { lifecycle[`window:${event}`] = callback }, removeEventListener: () => {} },
-    document }
-  const state = await new AsyncFunction(...Object.keys(dependencies), `${script}\nreturn { me, today, error, busy, displayedRecord, punchRecord, previousOpen, correctionLink, load, clock, logout, displayJapanDateTime, currentState, isOnBreak, statusInfo, canPerform, breakMinutes, workMinutes, formatDurationHuman, ...(typeof loadError !== 'undefined' ? {loadError} : {}), ...(typeof loading !== 'undefined' ? {loading} : {}) }`)(...Object.values(dependencies))
-  return { state: proxyRefs(state), html: () => {
-    const app = createSSRApp({ setup: () => state, ssrRender: render })
-    app.component('NuxtLink', { template: '<a><slot /></a>' })
-    return renderToString(app)
-  } }
+  const dependencies = {
+    ref,
+    computed,
+    useRouter: () => ({ replace: redirect }),
+    useRequestFetch: () => api,
+    $fetch: post,
+    displayJapanDateTime,
+    attendanceState,
+    canPerform,
+    calculateOriginalBreakMinutes,
+    calculateOriginalWorkMinutes,
+    formatDurationHuman,
+    punchTimes,
+    onMounted: (callback: Function) => {
+      lifecycle.mounted = callback
+    },
+    onUnmounted: (callback: Function) => {
+      lifecycle.unmounted = callback
+    },
+    setInterval: (callback: Function, delay: number) => {
+      lifecycle.intervalCalls = (lifecycle.intervalCalls || 0) + 1
+      lifecycle.intervalCallback = callback
+      lifecycle.intervalDelay = delay
+      return 1
+    },
+    clearInterval: () => {},
+    window: {
+      addEventListener: (event: string, callback: Function) => {
+        lifecycle[`window:${event}`] = callback
+      },
+      removeEventListener: () => {},
+    },
+    document,
+  }
+  const state = await new AsyncFunction(
+    ...Object.keys(dependencies),
+    `${script}\nreturn { me, today, error, busy, displayedRecord, punchRecord, previousOpen, correctionLink, load, clock, logout, displayJapanDateTime, currentState, isOnBreak, statusInfo, canPerform, breakMinutes, workMinutes, formatDurationHuman, ...(typeof loadError !== 'undefined' ? {loadError} : {}), ...(typeof loading !== 'undefined' ? {loading} : {}) }`,
+  )(...Object.values(dependencies))
+  return {
+    state: proxyRefs(state),
+    html: () => {
+      const app = createSSRApp({ setup: () => state, ssrRender: render })
+      app.component('NuxtLink', { template: '<a><slot /></a>' })
+      return renderToString(app)
+    },
+  }
 }
-const today = { date: '2026-09-18', record: null, openRecord: { id: 'shift-a', work_date: '2026-09-17', clock_in_at: '2026-09-17T00:00:00.000Z', clock_out_at: null } }
-const success = async (path: string) => path === '/api/auth/me' ? { display_name: 'Test', role: 'member' } : today
+const today = {
+  date: '2026-09-18',
+  record: null,
+  openRecord: { id: 'shift-a', work_date: '2026-09-17', clock_in_at: '2026-09-17T00:00:00.000Z', clock_out_at: null },
+}
+const success = async (path: string) => (path === '/api/auth/me' ? { display_name: 'Test', role: 'member' } : today)
 
 test('initial API failure displays an alert and retry even without user data', async () => {
-  const view = await page(async () => { throw { statusCode: 500 } })
+  const view = await page(async () => {
+    throw { statusCode: 500 }
+  })
   const html = await view.html()
   assert.match(html, /role="alert"/)
   assert.match(html, /再試行/)
 })
 test('successful retry removes the load error', async () => {
   let failed = true
-  const view = await page(async (path: string) => { if (failed) throw { statusCode: 500 }; return success(path) })
+  const view = await page(async (path: string) => {
+    if (failed) throw { statusCode: 500 }
+    return success(path)
+  })
   failed = false
   await view.state.load()
   const html = await view.html()
@@ -54,27 +121,45 @@ test('successful refresh preserves a clock error', async () => {
 })
 test('clock-out sends the displayed record id', async () => {
   let body: unknown
-  const view = await page(success, async (_path: string, options: any) => { body = options.body })
+  const view = await page(success, async (_path: string, options: any) => {
+    body = options.body
+  })
   await view.state.clock('out')
   assert.deepEqual(body, { action: 'out', recordId: 'shift-a' })
 })
 test('unauthorized initial load redirects to login', async () => {
   let destination: unknown
-  await page(async () => { throw { statusCode: 401 } }, undefined, async (path: string) => { destination = path })
+  await page(
+    async () => {
+      throw { statusCode: 401 }
+    },
+    undefined,
+    async (path: string) => {
+      destination = path
+    },
+  )
   assert.equal(destination, '/login')
 })
 test('clock buttons stay enabled while a return refresh is in flight', async () => {
   let pending: Promise<void> | undefined
-  const view = await page(async (path: string) => { await pending; return success(path) })
+  const view = await page(async (path: string) => {
+    await pending
+    return success(path)
+  })
   let release!: () => void
-  pending = new Promise<void>(resolve => { release = resolve })
+  pending = new Promise<void>((resolve) => {
+    release = resolve
+  })
   const refresh = view.state.load()
   try {
     const html = await view.html()
-    assert.match(html, /<button[^>]*disabled[^>]*>出勤を記録/)
-    assert.doesNotMatch(html, /<button[^>]*disabled[^>]*>休憩開始を記録/)
-    assert.doesNotMatch(html, /<button[^>]*disabled[^>]*>退勤を記録/)
-  } finally { release(); await refresh }
+    assert.match(html, /<button[^>]*disabled[^>]*>\s*出勤を記録/)
+    assert.doesNotMatch(html, /<button[^>]*disabled[^>]*>\s*休憩開始を記録/)
+    assert.doesNotMatch(html, /<button[^>]*disabled[^>]*>\s*退勤を記録/)
+  } finally {
+    release()
+    await refresh
+  }
 })
 
 test('a clock during return refresh waits for it and reloads the committed state', async () => {
@@ -84,19 +169,34 @@ test('a clock during return refresh waits for it and reloads the committed state
   let onBreak = false
   let posts = 0
   let attendanceRequests = 0
-  const view = await page(async (path: string) => {
-    if (path === '/api/auth/me') return { display_name: 'Test', role: 'member' }
-    attendanceRequests++
-    const result = { ...today, openRecord: { ...today.openRecord, break_started_at: onBreak ? '2026-09-18T01:00:00.000Z' : null } }
-    if (pending) await new Promise<void>(resolve => { release = resolve })
-    return result
-  }, async () => { posts++; onBreak = true; return {} }, undefined, lifecycle)
+  const view = await page(
+    async (path: string) => {
+      if (path === '/api/auth/me') return { display_name: 'Test', role: 'member' }
+      attendanceRequests++
+      const result = {
+        ...today,
+        openRecord: { ...today.openRecord, break_started_at: onBreak ? '2026-09-18T01:00:00.000Z' : null },
+      }
+      if (pending)
+        await new Promise<void>((resolve) => {
+          release = resolve
+        })
+      return result
+    },
+    async () => {
+      posts++
+      onBreak = true
+      return {}
+    },
+    undefined,
+    lifecycle,
+  )
   lifecycle.mounted()
   pending = true
   lifecycle['window:focus']()
   assert.equal(view.state.loading, true)
   const clock = view.state.clock('break_start')
-  await new Promise(resolve => setImmediate(resolve))
+  await new Promise((resolve) => setImmediate(resolve))
   assert.equal(posts, 0)
   pending = false
   release()
@@ -111,7 +211,9 @@ test('rapid repeated clicks submit only one clock request', async () => {
   let posts = 0
   const view = await page(success, async () => {
     posts++
-    await new Promise<void>(resolve => { release = resolve })
+    await new Promise<void>((resolve) => {
+      release = resolve
+    })
     return {}
   })
   const first = view.state.clock('break_start')
@@ -125,12 +227,27 @@ test('rapid repeated clicks submit only one clock request', async () => {
 test('dashboard displays original break and work durations without polling the API', async () => {
   const lifecycle: Record<string, any> = {}
   const durationToday = {
-    date: '2026-09-18', record: null,
-    openRecord: { id: 'shift-a', work_date: '2026-09-17', clock_in_at: '2026-09-17T20:00:00.000Z', clock_out_at: null,
-      original_clock_in_at: '2026-09-17T00:00:00.000Z', original_clock_out_at: null,
-      original_total_break_seconds: 1800, total_break_seconds: 9999, break_started_at: null, break_minutes: 15 }
+    date: '2026-09-18',
+    record: null,
+    openRecord: {
+      id: 'shift-a',
+      work_date: '2026-09-17',
+      clock_in_at: '2026-09-17T20:00:00.000Z',
+      clock_out_at: null,
+      original_clock_in_at: '2026-09-17T00:00:00.000Z',
+      original_clock_out_at: null,
+      original_total_break_seconds: 1800,
+      total_break_seconds: 9999,
+      break_started_at: null,
+      break_minutes: 15,
+    },
   }
-  const view = await page(async (path: string) => path === '/api/auth/me' ? { display_name: 'Test', role: 'member' } : durationToday, undefined, undefined, lifecycle)
+  const view = await page(
+    async (path: string) => (path === '/api/auth/me' ? { display_name: 'Test', role: 'member' } : durationToday),
+    undefined,
+    undefined,
+    lifecycle,
+  )
   lifecycle.mounted()
   assert.equal(lifecycle.intervalCalls, 1)
   assert.equal(lifecycle.intervalDelay, 60_000)
@@ -144,21 +261,26 @@ test('dashboard displays original break and work durations without polling the A
 test('returning to a visible or focused dashboard synchronizes with the server', async () => {
   const lifecycle: Record<string, any> = {}
   let attendanceRequests = 0
-  const view = await page(async (path: string) => {
-    if (path === '/api/auth/me') return { display_name: 'Test', role: 'member' }
-    attendanceRequests++
-    return today
-  }, undefined, undefined, lifecycle)
+  const view = await page(
+    async (path: string) => {
+      if (path === '/api/auth/me') return { display_name: 'Test', role: 'member' }
+      attendanceRequests++
+      return today
+    },
+    undefined,
+    undefined,
+    lifecycle,
+  )
   lifecycle.mounted()
   lifecycle.document.visibilityState = 'hidden'
   lifecycle['document:visibilitychange']()
-  await new Promise(resolve => setImmediate(resolve))
+  await new Promise((resolve) => setImmediate(resolve))
   assert.equal(attendanceRequests, 1)
   lifecycle.document.visibilityState = 'visible'
   lifecycle['document:visibilitychange']()
-  await new Promise(resolve => setImmediate(resolve))
+  await new Promise((resolve) => setImmediate(resolve))
   lifecycle['window:focus']()
-  await new Promise(resolve => setImmediate(resolve))
+  await new Promise((resolve) => setImmediate(resolve))
   assert.equal(attendanceRequests, 3)
   assert.ok(view.state.today)
 })
@@ -168,32 +290,52 @@ test('break button toggles and clock-out is disabled when on break', async () =>
   const view = await page(success)
   let html = await view.html()
   assert.match(html, /休憩開始を記録/)
-  assert.doesNotMatch(html, /<button[^>]*disabled[^>]*>退勤を記録/)
+  assert.doesNotMatch(html, /<button[^>]*disabled[^>]*>\s*退勤を記録/)
 
   // Trigger break_start
   let dispatchedBody: any
-  const breakStartView = await page(success, async (_path: string, options: any) => { dispatchedBody = options.body })
+  const breakStartView = await page(success, async (_path: string, options: any) => {
+    dispatchedBody = options.body
+  })
   await breakStartView.state.clock('break_start')
   assert.deepEqual(dispatchedBody, { action: 'break_start', recordId: 'shift-a' })
 
   // Active break state: clock-out must be disabled (Case 2)
   const onBreakToday = {
-    date: '2026-09-18', record: null,
-    openRecord: { id: 'shift-a', work_date: '2026-09-17', clock_in_at: '2026-09-17T00:00:00.000Z', clock_out_at: null, break_started_at: '2026-09-17T04:00:00.000Z' }
+    date: '2026-09-18',
+    record: null,
+    openRecord: {
+      id: 'shift-a',
+      work_date: '2026-09-17',
+      clock_in_at: '2026-09-17T00:00:00.000Z',
+      clock_out_at: null,
+      break_started_at: '2026-09-17T04:00:00.000Z',
+    },
   }
-  const onBreakView = await page(async (path: string) => path === '/api/auth/me' ? { display_name: 'Test', role: 'member' } : onBreakToday)
+  const onBreakView = await page(async (path: string) =>
+    path === '/api/auth/me' ? { display_name: 'Test', role: 'member' } : onBreakToday,
+  )
   html = await onBreakView.html()
   assert.match(html, /休憩中/)
   assert.match(html, /休憩終了を記録/)
-  assert.match(html, /<button[^>]*disabled[^>]*>退勤を記録/)
+  assert.match(html, /<button[^>]*disabled[^>]*>\s*退勤を記録/)
 })
 
 test('action panel uses distinct visual groups for start, break and end actions', async () => {
   const onBreakToday = {
-    date: '2026-09-18', record: null,
-    openRecord: { id: 'shift-a', work_date: '2026-09-17', clock_in_at: '2026-09-17T00:00:00.000Z', clock_out_at: null, break_started_at: '2026-09-17T04:00:00.000Z' }
+    date: '2026-09-18',
+    record: null,
+    openRecord: {
+      id: 'shift-a',
+      work_date: '2026-09-17',
+      clock_in_at: '2026-09-17T00:00:00.000Z',
+      clock_out_at: null,
+      break_started_at: '2026-09-17T04:00:00.000Z',
+    },
   }
-  const view = await page(async (path: string) => path === '/api/auth/me' ? { display_name: 'Test', role: 'member' } : onBreakToday)
+  const view = await page(async (path: string) =>
+    path === '/api/auth/me' ? { display_name: 'Test', role: 'member' } : onBreakToday,
+  )
   const html = await view.html()
   assert.match(html, /主要操作/)
   assert.match(html, /class="[^"]*clock-action[^"]*primary[^"]*"/)
@@ -206,10 +348,17 @@ test('action panel uses distinct visual groups for start, break and end actions'
 test('done state keeps the clock-in button disabled (idle vs done regression)', async () => {
   const completedToday = {
     date: '2026-09-18',
-    record: { id: 'shift-a', work_date: '2026-09-18', clock_in_at: '2026-09-18T00:00:00.000Z', clock_out_at: '2026-09-18T08:00:00.000Z' },
+    record: {
+      id: 'shift-a',
+      work_date: '2026-09-18',
+      clock_in_at: '2026-09-18T00:00:00.000Z',
+      clock_out_at: '2026-09-18T08:00:00.000Z',
+    },
     openRecord: null,
   }
-  const view = await page(async (path: string) => path === '/api/auth/me' ? { display_name: 'Test', role: 'member' } : completedToday)
+  const view = await page(async (path: string) =>
+    path === '/api/auth/me' ? { display_name: 'Test', role: 'member' } : completedToday,
+  )
   const html = await view.html()
   assert.equal(view.state.currentState, 'done')
   assert.match(html, /退勤済み/)
@@ -221,13 +370,18 @@ test('a real clock-out stays done even if clock_out_at is later cleared by a mon
     date: '2026-09-18',
     record: null,
     openRecord: {
-      id: 'shift-a', work_date: '2026-09-18',
-      clock_in_at: '2026-09-18T00:00:00.000Z', clock_out_at: null,
-      original_clock_in_at: '2026-09-18T00:00:00.000Z', original_clock_out_at: '2026-09-18T08:00:00.000Z',
+      id: 'shift-a',
+      work_date: '2026-09-18',
+      clock_in_at: '2026-09-18T00:00:00.000Z',
+      clock_out_at: null,
+      original_clock_in_at: '2026-09-18T00:00:00.000Z',
+      original_clock_out_at: '2026-09-18T08:00:00.000Z',
       break_started_at: null,
     },
   }
-  const view = await page(async (path: string) => path === '/api/auth/me' ? { display_name: 'Test', role: 'member' } : editedOutToday)
+  const view = await page(async (path: string) =>
+    path === '/api/auth/me' ? { display_name: 'Test', role: 'member' } : editedOutToday,
+  )
   const html = await view.html()
   assert.equal(view.state.currentState, 'done')
   assert.match(html, /退勤済み/)
@@ -239,14 +393,20 @@ test('dashboard uses original punch times after a manual edit', async () => {
   const today = {
     date: '2026-09-18',
     record: {
-      id: 'shift-a', work_date: '2026-09-18',
-      clock_in_at: '2026-09-18T00:00:00.000Z', clock_out_at: '2026-09-18T08:00:00.000Z',
-      original_clock_in_at: '2026-09-18T01:00:00.000Z', original_clock_out_at: '2026-09-18T09:00:00.000Z',
-      total_break_seconds: 0, original_total_break_seconds: 0,
+      id: 'shift-a',
+      work_date: '2026-09-18',
+      clock_in_at: '2026-09-18T00:00:00.000Z',
+      clock_out_at: '2026-09-18T08:00:00.000Z',
+      original_clock_in_at: '2026-09-18T01:00:00.000Z',
+      original_clock_out_at: '2026-09-18T09:00:00.000Z',
+      total_break_seconds: 0,
+      original_total_break_seconds: 0,
     },
     openRecord: null,
   }
-  const view = await page(async (path: string) => path === '/api/auth/me' ? { display_name: 'Test', role: 'member' } : today)
+  const view = await page(async (path: string) =>
+    path === '/api/auth/me' ? { display_name: 'Test', role: 'member' } : today,
+  )
   const html = await view.html()
   assert.match(html, /2026-09-18 10:00/)
   assert.match(html, /2026-09-18 18:00/)
@@ -256,15 +416,23 @@ test('dashboard uses original punch times after a manual edit', async () => {
 
 test('a clock-out entered on the month page is not shown until the shift is really clocked out', async () => {
   const prefilledToday = {
-    date: '2026-09-18', record: null,
+    date: '2026-09-18',
+    record: null,
     openRecord: {
-      id: 'shift-a', work_date: '2026-09-18',
-      clock_in_at: '2026-09-18T00:00:00.000Z', clock_out_at: '2026-09-18T09:00:00.000Z',
-      original_clock_in_at: '2026-09-18T00:00:00.000Z', original_clock_out_at: null,
-      total_break_seconds: 0, original_total_break_seconds: 0, break_started_at: null,
+      id: 'shift-a',
+      work_date: '2026-09-18',
+      clock_in_at: '2026-09-18T00:00:00.000Z',
+      clock_out_at: '2026-09-18T09:00:00.000Z',
+      original_clock_in_at: '2026-09-18T00:00:00.000Z',
+      original_clock_out_at: null,
+      total_break_seconds: 0,
+      original_total_break_seconds: 0,
+      break_started_at: null,
     },
   }
-  const view = await page(async (path: string) => path === '/api/auth/me' ? { display_name: 'Test', role: 'member' } : prefilledToday)
+  const view = await page(async (path: string) =>
+    path === '/api/auth/me' ? { display_name: 'Test', role: 'member' } : prefilledToday,
+  )
   const html = await view.html()
   assert.equal(view.state.currentState, 'working')
   assert.equal(view.state.punchRecord.clock_out_at, null)

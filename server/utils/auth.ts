@@ -19,17 +19,26 @@ export async function requireAdmin(event: H3Event) {
   return user
 }
 
-export async function requireAuthAttempt(event: H3Event, action: 'login' | 'invitation' | 'bootstrap' | 'verification') {
+export async function requireAuthAttempt(
+  event: H3Event,
+  action: 'login' | 'invitation' | 'bootstrap' | 'verification',
+) {
   const limits = { login: 10, invitation: 10, bootstrap: 5, verification: 20 }
   const visitor = getRequestHeader(event, 'cf-connecting-ip') || getRequestIP(event) || 'unknown'
   const now = new Date()
   const key = await sha256(`${action}:${visitor}`)
-  const allowed = await d1AuthRepository(db(event)).consumeAttempt(key, now.toISOString(), new Date(now.getTime() + 5 * 60_000).toISOString(), limits[action])
+  const allowed = await d1AuthRepository(db(event)).consumeAttempt(
+    key,
+    now.toISOString(),
+    new Date(now.getTime() + 5 * 60_000).toISOString(),
+    limits[action],
+  )
   if (!allowed) throw createError({ statusCode: 429, statusMessage: 'しばらく待ってから再試行してください。' })
 }
 
 export async function createSession(event: H3Event, userId: string) {
-  const sessionId = id(); const expiresAt = plusMinutes(60 * 24 * 14)
+  const sessionId = id()
+  const expiresAt = plusMinutes(60 * 24 * 14)
   await d1AuthRepository(db(event)).createSession(sessionId, userId, expiresAt)
   setCookie(event, cookieName, sessionId, { ...sessionCookieOptions(), expires: new Date(expiresAt) })
 }

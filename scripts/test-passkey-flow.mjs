@@ -13,32 +13,53 @@ const baseUrl = `http://localhost:${port}`
 const bootstrapToken = 'local-test-passkey-bootstrap-token'
 
 async function respondsOk() {
-  try { return (await fetch(`${baseUrl}/`, { signal: AbortSignal.timeout(1000) })).ok } catch { return false }
+  try {
+    return (await fetch(`${baseUrl}/`, { signal: AbortSignal.timeout(1000) })).ok
+  } catch {
+    return false
+  }
 }
 
 async function startWorker({ cwd, wrangler, persistTo }) {
   // Never run the test against another server that already listens on this port.
-  if (await respondsOk()) throw new Error(`Port ${port} is already in use; stop that server before running the passkey test.`)
-  const worker = spawn(process.execPath, [wrangler, 'dev', '--local', '--port', String(port), '--persist-to', persistTo,
-    '--var', `BOOTSTRAP_TOKEN:${bootstrapToken}`, '--var', 'RP_ID:localhost'],
-  { cwd, stdio: 'inherit', detached: process.platform !== 'win32' })
+  if (await respondsOk())
+    throw new Error(`Port ${port} is already in use; stop that server before running the passkey test.`)
+  const worker = spawn(
+    process.execPath,
+    [
+      wrangler,
+      'dev',
+      '--local',
+      '--port',
+      String(port),
+      '--persist-to',
+      persistTo,
+      '--var',
+      `BOOTSTRAP_TOKEN:${bootstrapToken}`,
+      '--var',
+      'RP_ID:localhost',
+    ],
+    { cwd, stdio: 'inherit', detached: process.platform !== 'win32' },
+  )
   const deadline = Date.now() + 30_000
   while (Date.now() < deadline && !exited(worker)) {
     if (await respondsOk()) return worker
-    await new Promise(resolve => setTimeout(resolve, 250))
+    await new Promise((resolve) => setTimeout(resolve, 250))
   }
   // The caller never receives this handle, so stop it here before failing.
   await stopWorker(worker)
   throw new Error('Passkey test Worker did not start within 30 seconds.')
 }
 
-const exited = worker => worker.exitCode !== null || worker.signalCode !== null
+const exited = (worker) => worker.exitCode !== null || worker.signalCode !== null
 
 async function stopWorker(worker) {
   if (!worker?.pid || exited(worker)) return
   const stopped = once(worker, 'exit')
-  const signal = name => {
-    try { process.platform === 'win32' ? worker.kill(name) : process.kill(-worker.pid, name) } catch {} // already gone
+  const signal = (name) => {
+    try {
+      process.platform === 'win32' ? worker.kill(name) : process.kill(-worker.pid, name)
+    } catch {} // already gone
   }
   signal('SIGTERM')
   // Escalate if Wrangler does not shut down, so cleanup cannot hang.
@@ -55,10 +76,16 @@ async function device(browser) {
   const page = await context.newPage()
   const cdp = await context.newCDPSession(page)
   await cdp.send('WebAuthn.enable')
-  const { authenticatorId } = await cdp.send('WebAuthn.addVirtualAuthenticator', { options: {
-    protocol: 'ctap2', transport: 'internal', hasResidentKey: true, hasUserVerification: true,
-    isUserVerified: true, automaticPresenceSimulation: true,
-  } })
+  const { authenticatorId } = await cdp.send('WebAuthn.addVirtualAuthenticator', {
+    options: {
+      protocol: 'ctap2',
+      transport: 'internal',
+      hasResidentKey: true,
+      hasUserVerification: true,
+      isUserVerified: true,
+      automaticPresenceSimulation: true,
+    },
+  })
   const credentials = async () => (await cdp.send('WebAuthn.getCredentials', { authenticatorId })).credentials
   return { context, page, credentials }
 }
@@ -77,15 +104,47 @@ export async function testPasskeyFlow({ cwd, run, wrangler }) {
   process.env.PLAYWRIGHT_BROWSERS_PATH ??= '0'
   await run(process.execPath, ['node_modules/playwright/cli.js', 'install', '--only-shell', 'chromium'])
   const { chromium } = await import('playwright')
-  const sql = command => run(process.execPath, [wrangler, 'd1', 'execute', 'kintai-note', '--local', '--persist-to', persistTo, '--json', '--command', command])
-  const query = async command => JSON.parse(await sql(command))[0].results
+  const sql = (command) =>
+    run(process.execPath, [
+      wrangler,
+      'd1',
+      'execute',
+      'kintai-note',
+      '--local',
+      '--persist-to',
+      persistTo,
+      '--json',
+      '--command',
+      command,
+    ])
+  const query = async (command) => JSON.parse(await sql(command))[0].results
 
   await mkdir('.wrangler', { recursive: true })
   const persistTo = await mkdtemp('.wrangler/test-passkey-flow-')
-  let worker; let browser
+  let worker
+  let browser
   try {
-    await run(process.execPath, [wrangler, 'd1', 'execute', 'kintai-note', '--local', '--persist-to', persistTo, '--file', 'db/schema.sql'])
-    await run(process.execPath, [wrangler, 'd1', 'migrations', 'apply', 'kintai-note', '--local', '--persist-to', persistTo])
+    await run(process.execPath, [
+      wrangler,
+      'd1',
+      'execute',
+      'kintai-note',
+      '--local',
+      '--persist-to',
+      persistTo,
+      '--file',
+      'db/schema.sql',
+    ])
+    await run(process.execPath, [
+      wrangler,
+      'd1',
+      'migrations',
+      'apply',
+      'kintai-note',
+      '--local',
+      '--persist-to',
+      persistTo,
+    ])
     worker = await startWorker({ cwd, wrangler, persistTo })
     browser = await chromium.launch()
 
@@ -103,7 +162,9 @@ export async function testPasskeyFlow({ cwd, run, wrangler }) {
     const adminUser = await me(admin.page)
     assert.equal(adminUser.role, 'admin')
     assert.equal((await admin.credentials()).length, 1)
-    const repeatedSetup = await admin.page.request.post('/api/admin/bootstrap', { data: { token: bootstrapToken, employeeCode: 'admin2', displayName: 'Second' } })
+    const repeatedSetup = await admin.page.request.post('/api/admin/bootstrap', {
+      data: { token: bootstrapToken, employeeCode: 'admin2', displayName: 'Second' },
+    })
     assert.equal(repeatedSetup.status(), 409, 'Setup must not run again once the administrator has a passkey.')
 
     // The administrator invites an employee from the admin page.
@@ -122,7 +183,12 @@ export async function testPasskeyFlow({ cwd, run, wrangler }) {
     const employeeUser = await me(employee.page)
     assert.equal(employeeUser.employee_code, 'E001')
     assert.equal(employeeUser.role, 'member')
-    assert.equal((await employee.page.request.post('/api/admin/invitations', { data: { employeeCode: 'E002', displayName: 'X' } })).status(), 403)
+    assert.equal(
+      (
+        await employee.page.request.post('/api/admin/invitations', { data: { employeeCode: 'E002', displayName: 'X' } })
+      ).status(),
+      403,
+    )
 
     // The invitation is single use, also from another device.
     const reuse = await device(browser)
@@ -171,8 +237,14 @@ export async function testPasskeyFlow({ cwd, run, wrangler }) {
     console.log('PASS: passkey setup, invitation, login, added passkey, excluded duplicate and disabled user.')
   } finally {
     // Attempt every cleanup step even if an earlier one fails.
-    try { await browser?.close() } finally {
-      try { await stopWorker(worker) } finally { await rm(persistTo, { recursive: true, force: true }) }
+    try {
+      await browser?.close()
+    } finally {
+      try {
+        await stopWorker(worker)
+      } finally {
+        await rm(persistTo, { recursive: true, force: true })
+      }
     }
   }
 }

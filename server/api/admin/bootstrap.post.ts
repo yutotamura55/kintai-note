@@ -8,14 +8,15 @@ export default defineEventHandler(async (event) => {
   await requireAuthAttempt(event, 'bootstrap')
   const envToken = event.context.cloudflare?.env?.BOOTSTRAP_TOKEN as string | undefined
   const body = await readBody<{ token: string; employeeCode: string; displayName: string }>(event)
-  if (!envToken || !body?.token || body.token !== envToken) throw createError({ statusCode: 403, statusMessage: 'セットアップを許可できません。' })
-  if (!body.employeeCode?.trim() || !body.displayName?.trim()) throw createError({ statusCode: 400, statusMessage: '社員番号と表示名を入力してください。' })
+  if (!envToken || !body?.token || body.token !== envToken)
+    throw createError({ statusCode: 403, statusMessage: 'セットアップを許可できません。' })
+  if (!body.employeeCode?.trim() || !body.displayName?.trim())
+    throw createError({ statusCode: 400, statusMessage: '社員番号と表示名を入力してください。' })
 
   const repository = d1AuthRepository(db(event))
   const users = await repository.listSetupUsers()
-  const pendingAdmin = users.length === 1 && users[0].role === 'admin' && users[0].passkey_count === 0
-    ? users[0]
-    : undefined
+  const pendingAdmin =
+    users.length === 1 && users[0].role === 'admin' && users[0].passkey_count === 0 ? users[0] : undefined
 
   // A transient failure after creating the first administrator must not make
   // setup impossible to complete. This recovery still needs the bootstrap
