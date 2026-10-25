@@ -7,7 +7,7 @@ import { openAttendance, OPEN_SHIFT_SQL, OPEN_SHIFT_ORDER_SQL, EFFECTIVE_CLOCK_I
 
 // Execute the real edit workflow and guarded UPDATE against SQLite. Only the D1 transport is adapted.
 const strip = (path: string) => stripTypeScriptTypes(readFileSync(new URL(path, import.meta.url), 'utf8')
-  .replace(/^import .*\n/gm, '').replace(/^export /gm, ''))
+  .replace(/^import [\s\S]*? from '[^']*'\n/gm, '').replace(/^export /gm, ''))
 const { saveAttendanceTimes: save, resolveBreakMinutes: resolve } = new Function(
   `${strip('../server/utils/attendance-edit.ts')}\nreturn { saveAttendanceTimes, resolveBreakMinutes }`)()
 const d1AttendanceRepository = new Function('id', 'openAttendance', 'OPEN_SHIFT_SQL', 'OPEN_SHIFT_ORDER_SQL', 'EFFECTIVE_CLOCK_IN_SQL',

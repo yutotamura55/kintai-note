@@ -9,7 +9,7 @@ import { japanDateTime, calculateBreakMinutes, calculateWorkMinutes, formatDurat
 
 // Run the actual route and PDF libraries, adapting only Nuxt, auth, DB and asset I/O.
 const source = readFileSync(new URL('../server/api/reports/month.pdf.get.ts', import.meta.url), 'utf8')
-const script = stripTypeScriptTypes(source.replace(/^import .*\n/gm, '')).replace('export default ', 'return ')
+const script = stripTypeScriptTypes(source.replace(/^import [\s\S]*? from '[^']*'\n/gm, '')).replace('export default ', 'return ')
 const fontBytes = readFileSync(new URL('../app/public/fonts/NotoSansJP-Regular.ttf', import.meta.url))
 const rows = [{ work_date: '2026-09-16', clock_in_at: '2026-09-16T16:00:00.000Z', clock_out_at: '2026-09-16T20:00:00.000Z', total_break_seconds: 3600, break_minutes: null }]
 async function report(displayName: string, records = rows, options = { cloudflare: true, assetStatus: 200 }) {

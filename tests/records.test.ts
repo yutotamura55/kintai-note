@@ -9,7 +9,7 @@ import * as attendance from '../shared/utils/attendance.ts'
 import type { AttendanceRecord } from '../shared/utils/attendance.ts'
 
 const source = readFileSync(new URL('../app/pages/records.vue', import.meta.url), 'utf8')
-const script = stripTypeScriptTypes(source.match(/<script setup lang="ts">([\s\S]*?)<\/script>/)![1].replace(/^import .*\n/gm, ''))
+const script = stripTypeScriptTypes(source.match(/<script setup lang="ts">([\s\S]*?)<\/script>/)![1].replace(/^import [\s\S]*? from '[^']*'\n/gm, ''))
 const render = new Function('require', compile(source.match(/<template>([\s\S]*)<\/template>/)![1], { mode: 'function' }).code)(createRequire(import.meta.url))
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor
 const record = { id: 'shift', work_date: '2026-09-19', clock_in_at: '2026-09-19T01:00:00.000Z', clock_out_at: '2026-09-19T09:00:00.000Z', original_clock_in_at: '2026-09-19T00:00:12.345Z', original_clock_out_at: null }
@@ -33,7 +33,7 @@ test('records expose the original time and only available restore targets', asyn
 test('legacy records cannot offer a restore action', async () => {
   const view = await page([{ ...record, original_clock_in_at: null }])
   assert.match(await view.html(), /元の打刻時刻なし/)
-  assert.doesNotMatch(await view.html(), /<button[^>]*>元の打刻時刻に戻す/)
+  assert.doesNotMatch(await view.html(), /<button[^>]*>\s*元の打刻時刻に戻す/)
 })
 test('restore sends only the record ID and reloads saved times', async () => {
   const rows = [{ ...record }]
@@ -60,13 +60,13 @@ test('restore disables mutations while saving', async () => {
   let release!: () => void
   const view = await page([record], () => new Promise<void>(resolve => { release = resolve }))
   const pending = view.state.restore(record)
-  try { assert.match(await view.html(), /<button[^>]*disabled[^>]*>元の打刻時刻に戻す/) }
+  try { assert.match(await view.html(), /<button[^>]*disabled[^>]*>\s*元の打刻時刻に戻す/) }
   finally { release(); await pending }
 })
 
 test('already restored records disable restoration even when originals are present', async () => {
   const view = await page([{ ...record, clock_in_at: record.original_clock_in_at }])
-  assert.match(await view.html(), /<button[^>]*disabled[^>]*>元の打刻時刻に戻す/)
+  assert.match(await view.html(), /<button[^>]*disabled[^>]*>\s*元の打刻時刻に戻す/)
 })
 
 test('records display break and actual work times and allow editing break minutes', async () => {

@@ -9,7 +9,7 @@ import { displayJapanDateTime, attendanceState, canPerform, calculateOriginalBre
 
 // Run the actual page script and template; replace only Nuxt/network/lifecycle boundaries.
 const source = readFileSync(new URL('../app/pages/dashboard.vue', import.meta.url), 'utf8')
-const script = stripTypeScriptTypes(source.match(/<script setup lang="ts">([\s\S]*?)<\/script>/)![1].replace(/^import .*\n/gm, ''))
+const script = stripTypeScriptTypes(source.match(/<script setup lang="ts">([\s\S]*?)<\/script>/)![1].replace(/^import [\s\S]*? from '[^']*'\n/gm, ''))
 const render = new Function('require', compile(source.match(/<template>([\s\S]*)<\/template>/)![1], { mode: 'function' }).code)(createRequire(import.meta.url))
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor
 async function page(api: Function, post: Function = async () => ({}), redirect: Function = async () => {}, lifecycle: Record<string, any> = {}) {
@@ -71,9 +71,9 @@ test('clock buttons stay enabled while a return refresh is in flight', async () 
   const refresh = view.state.load()
   try {
     const html = await view.html()
-    assert.match(html, /<button[^>]*disabled[^>]*>出勤を記録/)
-    assert.doesNotMatch(html, /<button[^>]*disabled[^>]*>休憩開始を記録/)
-    assert.doesNotMatch(html, /<button[^>]*disabled[^>]*>退勤を記録/)
+    assert.match(html, /<button[^>]*disabled[^>]*>\s*出勤を記録/)
+    assert.doesNotMatch(html, /<button[^>]*disabled[^>]*>\s*休憩開始を記録/)
+    assert.doesNotMatch(html, /<button[^>]*disabled[^>]*>\s*退勤を記録/)
   } finally { release(); await refresh }
 })
 
@@ -168,7 +168,7 @@ test('break button toggles and clock-out is disabled when on break', async () =>
   const view = await page(success)
   let html = await view.html()
   assert.match(html, /休憩開始を記録/)
-  assert.doesNotMatch(html, /<button[^>]*disabled[^>]*>退勤を記録/)
+  assert.doesNotMatch(html, /<button[^>]*disabled[^>]*>\s*退勤を記録/)
 
   // Trigger break_start
   let dispatchedBody: any
@@ -185,7 +185,7 @@ test('break button toggles and clock-out is disabled when on break', async () =>
   html = await onBreakView.html()
   assert.match(html, /休憩中/)
   assert.match(html, /休憩終了を記録/)
-  assert.match(html, /<button[^>]*disabled[^>]*>退勤を記録/)
+  assert.match(html, /<button[^>]*disabled[^>]*>\s*退勤を記録/)
 })
 
 test('action panel uses distinct visual groups for start, break and end actions', async () => {

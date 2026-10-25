@@ -6,7 +6,7 @@ import { stripTypeScriptTypes } from 'node:module'
 // The edit workflow depends only on the repository contract, so a recording fake stands in for D1.
 // The guarded UPDATE runs against SQLite in attendance-update.test.ts and against local D1 in npm run test:local.
 const source = readFileSync(new URL('../server/utils/attendance-edit.ts', import.meta.url), 'utf8')
-const script = stripTypeScriptTypes(source.replace(/^import .*\n/gm, '').replace(/^export /gm, ''))
+const script = stripTypeScriptTypes(source.replace(/^import [\s\S]*? from '[^']*'\n/gm, '').replace(/^export /gm, ''))
 const { findOwnedAttendance, saveAttendanceTimes, editAttendanceTimes, restoreAttendanceTimes } = new Function(
   `${script}\nreturn { findOwnedAttendance, saveAttendanceTimes, editAttendanceTimes, restoreAttendanceTimes }`)()
 

@@ -7,7 +7,7 @@ import { workDateAt } from '../shared/utils/attendance.ts'
 // The punch workflow depends only on the repository contract, so a recording fake stands in for D1.
 // The guarded SQL itself is exercised against local D1 by npm run test:local.
 const source = readFileSync(new URL('../server/utils/attendance-punch.ts', import.meta.url), 'utf8')
-const script = stripTypeScriptTypes(source.replace(/^import .*\n/gm, '').replace(/^export /gm, ''))
+const script = stripTypeScriptTypes(source.replace(/^import [\s\S]*? from '[^']*'\n/gm, '').replace(/^export /gm, ''))
 const recordPunch = new Function('workDateAt', `${script}\nreturn recordPunch`)(workDateAt)
 
 function fakeRepository({ oldestOpen = null, owned = null, outcome = 'applied' }: { oldestOpen?: any; owned?: any; outcome?: string } = {}) {
