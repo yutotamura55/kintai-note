@@ -14,6 +14,7 @@ import {
   formatDurationHuman,
   punchTimes,
 } from '../shared/utils/attendance.ts'
+import { apiErrorMessage } from '../app/utils/api-error.ts'
 
 // Run the actual page script and template; replace only Nuxt/network/lifecycle boundaries.
 const source = readFileSync(new URL('../app/pages/dashboard.vue', import.meta.url), 'utf8')
@@ -45,6 +46,7 @@ async function page(
     useRouter: () => ({ replace: redirect }),
     useRequestFetch: () => api,
     $fetch: post,
+    apiErrorMessage,
     displayJapanDateTime,
     attendanceState,
     canPerform,
@@ -141,13 +143,14 @@ test('unauthorized initial load redirects to login', async () => {
   assert.equal(destination, '/login')
 })
 test('clock buttons stay enabled while a return refresh is in flight', async () => {
-  let pending: Promise<void> | undefined
+  // The first load passes through; later loads wait until the gate is released.
+  const gate: { pending?: Promise<void> } = {}
   const view = await page(async (path: string) => {
-    await pending
+    await gate.pending
     return success(path)
   })
   let release!: () => void
-  pending = new Promise<void>((resolve) => {
+  gate.pending = new Promise<void>((resolve) => {
     release = resolve
   })
   const refresh = view.state.load()

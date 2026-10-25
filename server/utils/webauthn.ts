@@ -1,4 +1,5 @@
 import type { H3Event } from 'h3'
+import type { AuthenticationResponseJSON, RegistrationResponseJSON } from '@simplewebauthn/server'
 import { db, fromBase64URL, id, isoNow, plusMinutes, toBase64URL } from './db'
 import { d1AuthRepository } from './auth-repository'
 import { requireAuthAttempt } from './auth'
@@ -66,7 +67,7 @@ export async function loginOptions(event: H3Event) {
   return options
 }
 
-export async function verifyLogin(event: H3Event, response: any) {
+export async function verifyLogin(event: H3Event, response: AuthenticationResponseJSON) {
   const { verifyAuthenticationResponse } = await webauthn()
   const challenge = await consumeChallenge(event, 'login')
   const repository = d1AuthRepository(db(event))
@@ -115,7 +116,11 @@ export async function registrationOptions(
   return options
 }
 
-export async function verifyRegistration(event: H3Event, response: any, flow: 'invitation' | 'account') {
+export async function verifyRegistration(
+  event: H3Event,
+  response: RegistrationResponseJSON,
+  flow: 'invitation' | 'account',
+) {
   const { verifyRegistrationResponse } = await webauthn()
   const challenge = await consumeChallenge(event, 'register')
   if ((flow === 'invitation' && !challenge.invitation_id) || (flow === 'account' && challenge.invitation_id)) {

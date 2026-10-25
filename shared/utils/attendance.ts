@@ -111,14 +111,20 @@ export function parseJapanDateTime(value: unknown): string | null {
   return timestamp.toISOString()
 }
 
-export function calculateBreakMinutes(record: AttendanceRecord, now: Date = new Date()): number {
+// The fields the month-page durations read, so a query can select only these.
+export type DurationFields = Pick<
+  AttendanceRecord,
+  'clock_in_at' | 'clock_out_at' | 'break_started_at' | 'total_break_seconds' | 'break_minutes'
+>
+
+export function calculateBreakMinutes(record: DurationFields, now: Date = new Date()): number {
   if (record.break_minutes !== null && record.break_minutes !== undefined) {
     return Math.max(0, record.break_minutes)
   }
   return calculatePunchBreakMinutes(record, now)
 }
 
-export function calculatePunchBreakMinutes(record: AttendanceRecord, now: Date = new Date()): number {
+export function calculatePunchBreakMinutes(record: DurationFields, now: Date = new Date()): number {
   let seconds = record.total_break_seconds || 0
   if (record.break_started_at) {
     const start = new Date(record.break_started_at).getTime()
@@ -130,7 +136,7 @@ export function calculatePunchBreakMinutes(record: AttendanceRecord, now: Date =
   return Math.max(0, Math.floor(seconds / 60))
 }
 
-export function calculateWorkMinutes(record: AttendanceRecord, now: Date = new Date()): number {
+export function calculateWorkMinutes(record: DurationFields, now: Date = new Date()): number {
   if (record.break_minutes !== null && record.break_minutes !== undefined) {
     return Math.max(
       0,
@@ -140,7 +146,7 @@ export function calculateWorkMinutes(record: AttendanceRecord, now: Date = new D
   return calculatePunchWorkMinutes(record, now)
 }
 
-export function calculatePunchWorkMinutes(record: AttendanceRecord, now: Date = new Date()): number {
+export function calculatePunchWorkMinutes(record: DurationFields, now: Date = new Date()): number {
   if (!record.clock_in_at) return 0
   const start = new Date(record.clock_in_at).getTime()
   const end = record.clock_out_at

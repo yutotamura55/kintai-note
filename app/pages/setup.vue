@@ -16,8 +16,8 @@ async function setup() {
     const response = await startRegistration({ optionsJSON: options })
     await $fetch('/api/auth/passkeys/register-verify', { method: 'POST', body: response })
     await navigateTo('/dashboard')
-  } catch (cause: any) {
-    error.value = cause?.data?.statusMessage || '初期設定に失敗しました。'
+  } catch (cause) {
+    error.value = apiErrorMessage(cause, '初期設定に失敗しました。')
   } finally {
     busy.value = false
   }

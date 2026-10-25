@@ -8,15 +8,15 @@ async function invite() {
   busy.value = true
   error.value = ''
   try {
-    const result = await $fetch<any>('/api/admin/invitations', {
+    const result = await $fetch<{ invitationUrl: string; expiresAt: string }>('/api/admin/invitations', {
       method: 'POST',
       body: { employeeCode: employeeCode.value, displayName: displayName.value },
     })
     invitationUrl.value = result.invitationUrl
     employeeCode.value = ''
     displayName.value = ''
-  } catch (e: any) {
-    error.value = e?.data?.statusMessage || '招待を作成できませんでした。'
+  } catch (cause) {
+    error.value = apiErrorMessage(cause, '招待を作成できませんでした。')
   } finally {
     busy.value = false
   }

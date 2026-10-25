@@ -3,13 +3,16 @@ import { startRegistration, type PublicKeyCredentialCreationOptionsJSON } from '
 const route = useRoute()
 const busy = ref(false)
 const error = ref('')
-function messageForRegistrationError(cause: any) {
-  if (cause?.data?.statusMessage) return cause.data.statusMessage
-  if (cause?.name === 'NotAllowedError')
+function messageForRegistrationError(cause: unknown) {
+  const apiMessage = apiErrorMessage(cause, '')
+  if (apiMessage) return apiMessage
+  // Browser and SimpleWebAuthn errors report the reason in name and message.
+  const { name, message } = (cause ?? {}) as { name?: string; message?: string }
+  if (name === 'NotAllowedError')
     return '端末側でパスキー登録が中断または拒否されました。Chrome または Safari の通常タブで招待URLを開き、画面ロック解除を完了してください。'
-  if (cause?.name === 'SecurityError')
+  if (name === 'SecurityError')
     return 'このブラウザでは安全なパスキー登録を開始できません。Chrome または Safari の通常タブで招待URLを開いてください。'
-  return cause?.message || 'パスキーを登録できませんでした。'
+  return message || 'パスキーを登録できませんでした。'
 }
 async function activate() {
   busy.value = true
@@ -22,7 +25,7 @@ async function activate() {
     const response = await startRegistration({ optionsJSON: options })
     await $fetch('/api/auth/activate-verify', { method: 'POST', body: response })
     await navigateTo('/dashboard')
-  } catch (cause: any) {
+  } catch (cause) {
     error.value = messageForRegistrationError(cause)
   } finally {
     busy.value = false
