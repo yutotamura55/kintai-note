@@ -58,6 +58,8 @@ Cloudflare Workers から D1 binding を利用する構成自体は妥当です�
 
 ## 指摘事項
 
+この節のコードへのリンクは、指摘した時点のコード（コミット `14cc7ce`）の行を指します。その後の修正で、`main` の該当箇所は変わっています。
+
 ### 高: 招待URLの一回性が登録完了時に保証されない
 
 `activate-options` は招待が未使用かを確認して登録チャレンジを発行しますが、登録完了時の `verifyRegistration` はチャレンジだけを消費し、招待の未使用・未期限切れを再確認しません。
@@ -66,15 +68,15 @@ Cloudflare Workers から D1 binding を利用する構成自体は妥当です�
 
 該当箇所:
 
-- [activate-options.post.ts](/home/y-tamura/workspace/kintai-note/server/api/auth/activate-options.post.ts:4)
-- [webauthn.ts](/home/y-tamura/workspace/kintai-note/server/utils/webauthn.ts:68)
-- [activate-verify.post.ts](/home/y-tamura/workspace/kintai-note/server/api/auth/activate-verify.post.ts:5)
+- [activate-options.post.ts](https://github.com/yutotamura55/kintai-note/blob/14cc7ce3dbc1404352f203e7965ca8cd0a2015f8/server/api/auth/activate-options.post.ts#L4)
+- [webauthn.ts](https://github.com/yutotamura55/kintai-note/blob/14cc7ce3dbc1404352f203e7965ca8cd0a2015f8/server/utils/webauthn.ts#L68)
+- [activate-verify.post.ts](https://github.com/yutotamura55/kintai-note/blob/14cc7ce3dbc1404352f203e7965ca8cd0a2015f8/server/api/auth/activate-verify.post.ts#L5)
 
 登録完了時に、招待が未使用かつ期限内であることを条件に、招待の消費・ユーザー有効化・パスキー登録を原子的に処理する必要があります。
 
 ### 中: ログアウトがサーバー側セッションを失効させない
 
-ログアウト処理はブラウザCookieを削除するだけで、D1の` sessions`行を削除していません。[auth.ts](/home/y-tamura/workspace/kintai-note/server/utils/auth.ts:29)
+ログアウト処理はブラウザCookieを削除するだけで、D1の` sessions`行を削除していません。[auth.ts](https://github.com/yutotamura55/kintai-note/blob/14cc7ce3dbc1404352f203e7965ca8cd0a2015f8/server/utils/auth.ts#L29)
 
 Cookieが複製・窃取されていた場合、ログアウト後も最大14日間利用できます。OWASPも、ログアウト時にはサーバー側のセッション状態を無効化することを求めています。[OWASP Session Management](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html)
 
@@ -82,7 +84,7 @@ Cookieが複製・窃取されていた場合、ログアウト後も最大14日
 
 ### 中: WebAuthnチャレンジの取得と削除が原子的ではない
 
-チャレンジ消費は`SELECT`と`DELETE`という別々の操作です。[webauthn.ts](/home/y-tamura/workspace/kintai-note/server/utils/webauthn.ts:27)
+チャレンジ消費は`SELECT`と`DELETE`という別々の操作です。[webauthn.ts](https://github.com/yutotamura55/kintai-note/blob/14cc7ce3dbc1404352f203e7965ca8cd0a2015f8/server/utils/webauthn.ts#L27)
 
 同じCookieを持つ並行リクエストがSELECTを通過してからDELETEされると、同じチャレンジを複数の検証処理が利用できます。WebAuthn署名とカウンタ検証が別にあるため、直ちに認証突破を意味するものではありませんが、ワンタイムチャレンジの要件を満たしていません。
 
@@ -90,13 +92,13 @@ Cookieが複製・窃取されていた場合、ログアウト後も最大14日
 
 ### 中: 初期管理者作成に並行実行の競合がある
 
-初期ユーザーが0人であることをSELECTで確認してから、別のINSERTを実行しています。[bootstrap.post.ts](/home/y-tamura/workspace/kintai-note/server/api/admin/bootstrap.post.ts:11)
+初期ユーザーが0人であることをSELECTで確認してから、別のINSERTを実行しています。[bootstrap.post.ts](https://github.com/yutotamura55/kintai-note/blob/14cc7ce3dbc1404352f203e7965ca8cd0a2015f8/server/api/admin/bootstrap.post.ts#L11)
 
 同じ`BOOTSTRAP_TOKEN`を使った並行リクエストがあると、複数の管理者を作成できる可能性があります。通常は初期セットアップ時だけの問題ですが、初期状態の一意性をDBまたは単一トランザクションで保証すべきです。
 
 ### 中: 認証・初期設定エンドポイントにアプリ側のレート制限がない
 
-ログインオプション、招待トークン検証、初期管理者セットアップなどに明示的なレート制限がありません。ログインオプション生成のたびに5分間有効な行が`auth_challenges`へ追加され、期限切れ行はログイン成功時の処理でしかまとめて削除されません。[webauthn.ts](/home/y-tamura/workspace/kintai-note/server/utils/webauthn.ts:19)
+ログインオプション、招待トークン検証、初期管理者セットアップなどに明示的なレート制限がありません。ログインオプション生成のたびに5分間有効な行が`auth_challenges`へ追加され、期限切れ行はログイン成功時の処理でしかまとめて削除されません。[webauthn.ts](https://github.com/yutotamura55/kintai-note/blob/14cc7ce3dbc1404352f203e7965ca8cd0a2015f8/server/utils/webauthn.ts#L19)
 
 Cloudflare側のWAF/Rate Limiting設定は未確認なので、本番で無制限とは断定できません。アプリケーションまたはCloudflare側で、少なくとも認証試行・招待検証・初期セットアップに制限を設けるべきです。
 
