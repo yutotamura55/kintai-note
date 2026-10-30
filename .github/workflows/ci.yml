@@ -103,5 +103,6 @@ jobs:
         run: |
           test -n "$CLOUDFLARE_API_TOKEN"
           test -n "$CLOUDFLARE_ACCOUNT_ID"
+          npx wrangler d1 time-travel info kintai-note
           npm run db:apply
           npx wrangler deploy
