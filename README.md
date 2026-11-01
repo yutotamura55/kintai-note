@@ -139,3 +139,10 @@ Cloudflare リソースは [iac/](./iac/README.md) の Terraform で作成しま
 PDFの氏名にはNoto Sans JPを埋め込みます。フォントは `app/public/fonts/` にライセンスとともに同梱し、Workersの `ASSETS` バインディングから読み込みます。外部CDNへの接続は不要です。PDFには使用した文字だけを埋め込み、フォント全体はWorkerのJavaScriptバンドルに含めません。
 
 フォントの出典・生成手順は [fonts/README.md](app/public/fonts/README.md) を参照してください。日本語・かな・異体字の氏名を含むPDFの生成と文字抽出を単体テストで、配備したフォントを使うダウンロードをローカル統合テストで確認します。
+
+## ライセンス
+
+このリポジトリのコードは [MIT ライセンス](LICENSE) で公開しています。次のファイルは MIT の対象外です。
+
+- `app/public/fonts/` のフォント：SIL Open Font License 1.1（[OFL.txt](app/public/fonts/OFL.txt)）に従います。
+- `server/worker-runtime.d.ts`：Wrangler が生成した Cloudflare の型定義で、ファイル内の表示のとおり Apache License 2.0 に従います。
