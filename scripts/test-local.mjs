@@ -10,6 +10,7 @@ const wrangler = new URL('../node_modules/wrangler/bin/wrangler.js', import.meta
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm'
 const baseUrl = 'http://127.0.0.1:8788'
 const sessionCookie = '__Host-kintai-session=local-test-attendance-session'
+const otherSessionCookie = '__Host-kintai-session=local-test-other-session'
 
 function run(command, args) {
   return new Promise((resolve, reject) => {
@@ -51,6 +52,24 @@ async function request(path, options = {}) {
     ...options,
     headers: { cookie: sessionCookie, 'content-type': 'application/json', ...options.headers },
   })
+}
+
+async function readPdfText(response) {
+  assert(response.status === 200, `PDF request failed with status ${response.status}.`)
+  const bytes = new Uint8Array(await response.arrayBuffer())
+  assert(new TextDecoder().decode(bytes.slice(0, 5)) === '%PDF-', 'PDF response is not a PDF.')
+  const task = getDocument({ data: bytes, useSystemFonts: true, isEvalSupported: false })
+  try {
+    const document = await task.promise
+    const texts = []
+    for (let number = 1; number <= document.numPages; number++) {
+      const page = await document.getPage(number)
+      texts.push(...(await page.getTextContent()).items.map((item) => item.str || ''))
+    }
+    return texts.join(' ')
+  } finally {
+    await task.destroy()
+  }
 }
 
 let worker
@@ -159,21 +178,12 @@ try {
   ])
   const pdf = await request('/api/reports/month.pdf?month=2026-09')
   assert(pdf.status === 200 && pdf.headers.get('content-type')?.includes('application/pdf'), 'Monthly PDF failed.')
-  const pdfBytes = new Uint8Array(await pdf.arrayBuffer())
-  assert(new TextDecoder().decode(pdfBytes.slice(0, 5)) === '%PDF-', 'PDF response is not a PDF.')
-  const pdfTask = getDocument({ data: pdfBytes, useSystemFonts: true, isEvalSupported: false })
-  try {
-    const document = await pdfTask.promise
-    const page = await document.getPage(1)
-    const text = (await page.getTextContent()).items.map((item) => item.str || '').join(' ')
-    assert(text.includes('山田 太郎'), 'Downloaded PDF lost the Japanese display name.')
-    assert(
-      text.includes('2026-09-17 01:00') && text.includes('2026-09-17 05:00'),
-      'Downloaded PDF lost Japan calendar dates.',
-    )
-  } finally {
-    await pdfTask.destroy()
-  }
+  const pdfText = await readPdfText(pdf)
+  assert(pdfText.includes('山田 太郎'), 'Downloaded PDF lost the Japanese display name.')
+  assert(
+    pdfText.includes('2026-09-17 01:00') && pdfText.includes('2026-09-17 05:00'),
+    'Downloaded PDF lost Japan calendar dates.',
+  )
 
   // Seed a pre-change unfinished shift; only the deterministic test fixture is modified.
   await run(process.execPath, [
@@ -348,11 +358,65 @@ try {
     request('/api/attendance/clock', {
       method: 'POST',
       body: JSON.stringify({ action, recordId }),
-      headers: { cookie: '__Host-kintai-session=local-test-other-session' },
+      headers: { cookie: otherSessionCookie },
     })
   const readOwnedOpen = async () =>
     (await (await request('/api/attendance/month?month=1998-01')).json()).results.find((row) => row.id === ownedOpenId)
   const openBefore = await readOwnedOpen()
+
+  // Both users have a row in this month, so an empty response or a third user's row also fails.
+  const ownerId = 'local-test-attendance-user'
+  const otherRecordId = 'local-test-other-record'
+  const readAsOther = (path) => request(path, { headers: { cookie: otherSessionCookie } })
+  await run(process.execPath, [
+    wrangler,
+    'd1',
+    'execute',
+    'kintai-note',
+    '--local',
+    '--command',
+    `INSERT INTO attendance_records (id, user_id, work_date, clock_in_at, clock_out_at)
+     VALUES ('${otherRecordId}', 'local-test-other-user', '1998-01-02', '1998-01-02T00:00:00.000Z', '1998-01-02T09:00:00.000Z')`,
+  ])
+  assert(openBefore?.user_id === ownerId, 'Owner must see their record in the monthly list.')
+  const otherMonth = await readAsOther('/api/attendance/month?month=1998-01')
+  assert(otherMonth.status === 200, 'Another user could not read their own month.')
+  assert(
+    JSON.stringify((await otherMonth.json()).results.map((row) => row.id)) === JSON.stringify([otherRecordId]),
+    "The monthly list must return only the signed-in user's records.",
+  )
+  const ownerToday = await (await request('/api/attendance/today')).json()
+  assert(
+    ownerToday.record?.user_id === ownerId && ownerToday.openRecord?.id === ownedOpenId,
+    "Owner must see today's record and their open shift.",
+  )
+  const otherToday = await readAsOther('/api/attendance/today')
+  assert(otherToday.status === 200, 'Another user could not read their own day.')
+  const otherTodayData = await otherToday.json()
+  assert(otherTodayData.record === null, "Today's record belongs to another user.")
+  assert(otherTodayData.openRecord === null, 'The open shift belongs to another user.')
+  const ownerPdfText = await readPdfText(await request('/api/reports/month.pdf?month=1998-01'))
+  assert(
+    ownerPdfText.includes('山田 太郎') && ownerPdfText.includes('1998-01-01 09:00'),
+    'Owner must see their name and time in the monthly PDF.',
+  )
+  const otherPdfText = await readPdfText(await readAsOther('/api/reports/month.pdf?month=1998-01'))
+  assert(
+    otherPdfText.includes('Other') && otherPdfText.includes('1998-01-02 09:00'),
+    "Another user's PDF must show their name and record.",
+  )
+  assert(!otherPdfText.includes('山田 太郎'), "The monthly PDF contains another user's display name.")
+  assert(!otherPdfText.includes('1998-01-01'), "The monthly PDF contains another user's record.")
+  await run(process.execPath, [
+    wrangler,
+    'd1',
+    'execute',
+    'kintai-note',
+    '--local',
+    '--command',
+    `DELETE FROM attendance_records WHERE id='${otherRecordId}'`,
+  ])
+
   assert(
     (await otherClock('break_start', ownedOpenId)).status === 409,
     "Another user's record ID must not start a break.",
@@ -362,7 +426,7 @@ try {
   const otherEdit = await request('/api/attendance/record', {
     method: 'PUT',
     body: JSON.stringify({ id: ownedOpenId, clockIn: '1998-01-01T08:00', clockOut: '1998-01-01T17:00' }),
-    headers: { cookie: '__Host-kintai-session=local-test-other-session' },
+    headers: { cookie: otherSessionCookie },
   })
   assert(otherEdit.status === 404, "Another user's record ID must not be edited.")
   assert(
