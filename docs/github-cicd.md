@@ -48,6 +48,17 @@ production environmentに次も登録します。
 
 [初回import手順](../iac/README.md)を完了し、planを確認してから自動デプロイを有効にしてください。
 
+## 依存の更新
+
+GitHub の Dependabot で、npm と GitHub Actions の依存の脆弱性と更新に気づけるようにしています。Terraform の provider と Docker のイメージは対象外です。2026-11-01 にリポジトリの設定で Dependabot alerts と Dependabot security updates を有効にしました。
+
+- **セキュリティ更新：** 脆弱性が公表され、修正版があって更新できる場合に、Dependabot が修正の PR を作ります。有効かどうかは `.github/dependabot.yml` に依存しません。
+- **通常の更新：** `.github/dependabot.yml` で週に 1 回確かめます。公開から 7 日たった版だけを対象にし、npm の minor と patch は 1 つの PR にまとめます。7 日の待ちはセキュリティ更新には適用されません。
+- **Wrangler の PR：** Wrangler の更新で workerd の版が変わると、型定義が古くなって `Static checks` が失敗します。Dependabot は型定義を生成し直さないので、Wrangler だけ別の PR にしています。PR のブランチで `npm run types:workers` を実行し、結果をコミットしてからマージします。
+- **マージ：** Dependabot の PR も、他の PR と同じくメンテナーが確かめてマージします。マージすると本番のデプロイが動きます。
+
+`npm audit` は CI に入れていません。入れると、PR と関係のない脆弱性が公表されただけで、すべての PR の必須チェックが失敗し、緊急の修正もマージできなくなるためです。脆弱性には Dependabot のアラートで気づき、修正は専用の PR で行います。
+
 ## DB変更
 
 `db/schema.sql` は既存の初期スキーマとして維持し、追加変更は `migrations/` の番号付きSQLに記載します。`npm run db:apply` は初期スキーマの適用後、Wrangler の `d1 migrations apply kintai-note --remote` を実行します。CIはこの処理が成功した後にWorkerをデプロイします。ローカルでは `npm run db:local:apply` を使います。
