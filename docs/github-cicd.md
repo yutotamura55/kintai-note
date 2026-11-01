@@ -48,6 +48,17 @@ production environmentに次も登録します。
 
 [初回import手順](../iac/README.md)を完了し、planを確認してから自動デプロイを有効にしてください。
 
+## 依存の更新
+
+GitHub の Dependabot で、npm と GitHub Actions の依存の脆弱性と更新に気づけるようにしています。Terraform の provider と Docker のイメージは対象外です。2026-11-01 にリポジトリの設定で Dependabot alerts と Dependabot security updates を有効にしました。
+
+- **セキュリティ更新：** 脆弱性が公表され、修正版があって更新できる場合に、Dependabot が修正の PR を作ります。有効かどうかは `.github/dependabot.yml` に依存しません。
+- **通常の更新：** `.github/dependabot.yml` で週に 1 回確かめます。公開から 7 日たった版だけを対象にし、npm の minor と patch は 1 つの PR にまとめます。7 日の待ちはセキュリティ更新には適用されません。
+- **Wrangler の PR：** Wrangler の更新で workerd の版が変わると、型定義が古くなって `Static checks` が失敗します。Dependabot は型定義を生成し直さないので、Wrangler だけ別の PR にしています。PR のブランチで `npm run types:workers` を実行し、結果をコミットしてからマージします。
+- **マージ：** Dependabot の PR も、他の PR と同じくメンテナーが確かめてマージします。マージすると本番のデプロイが動きます。
+
+`npm audit` は CI に入れていません。入れると、PR と関係のない脆弱性が公表されただけで、すべての PR の必須チェックが失敗し、緊急の修正もマージできなくなるためです。脆弱性には Dependabot のアラートで気づき、修正は専用の PR で行います。
+
 ## DB変更
 
 `db/schema.sql` は既存の初期スキーマとして維持し、追加変更は `migrations/` の番号付きSQLに記載します。`npm run db:apply` は初期スキーマの適用後、Wrangler の `d1 migrations apply kintai-note --remote` を実行します。CIはこの処理が成功した後にWorkerをデプロイします。ローカルでは `npm run db:local:apply` を使います。
@@ -55,6 +66,36 @@ production environmentに次も登録します。
 `0001_original_attendance_times.sql` は初回打刻時刻の2カラムを追加します。既存レコードの時刻は変更せず、初回値は不明（NULL）のまま残します。新規DBにも既存DBにも、同じ「初期スキーマ → マイグレーション」の順で適用してください。`schema.sql` だけでは最新の構造になりません。
 
 [Wranglerのマイグレーション管理](https://developers.cloudflare.com/d1/reference/migrations/)により、適用済みのファイルは再実行されません。適用済みSQLは変更せず、次の番号のファイルを追加してください。今回の変更はカラム追加のみのため、旧Workerも動作できます。ただし旧Workerへ戻すと、その間の打刻には初回値が保存されません。
+
+### マイグレーションの規則
+
+デプロイの job は、人の承認なしに本番でマイグレーションを実行します。勤怠記録を失わないよう、次を守ります。
+
+- **追加を先に出す。** 列やテーブルの追加だけを先の版で出し、列の削除や名前の変更は、古い列を使うコードがなくなった後の版で行います。
+- **親のテーブルを `DROP TABLE` しない。** `users` と `invitations` は、他のテーブルから `ON DELETE CASCADE` で参照されています。`DROP TABLE` は行を削除してからテーブルを消すので、子のテーブルの行も消えます。D1 では外部キーの強制を止められません（[D1 の外部キー](https://developers.cloudflare.com/d1/sql-api/foreign-keys/)）。公式資料にある `PRAGMA defer_foreign_keys = on` を使っても、連鎖削除は止まりません。2026-10-31 にローカルの D1 で、`users` を作り直すと `users` の行が残り、`attendance_records` の行が 0 件になることを確かめました。
+- **`PRAGMA foreign_keys` をマイグレーションに書かない。** SQLite の一般的な作り直しの手順で使いますが、D1 では効きません。テストが失敗します。
+- **`db/schema.sql` と矛盾させない。** デプロイのたびに `schema.sql` を適用し直します。ここにある索引の列を消すと、次のデプロイの `db:apply` が失敗します。
+- **親を作り直すのは、列の追加で済まないときだけにする。** その場合は、依存するテーブルをすべてまとめて作り直します。今のスキーマの依存の順は、`users` → `invitations` → `passkeys`・`auth_challenges`・`sessions`・`attendance_records` です（`auth_challenges` は `users` と `invitations` の両方を参照します）。
+  1. 新しいテーブル（`users_new` など）を依存の順に作ります。外部キーは、参照先の新しいテーブルに向けます。
+  2. 依存の順に行をコピーします。
+  3. 依存の逆順に、古いテーブルを `DROP TABLE` します。
+  4. 依存の順に、新しいテーブルの名前を元に戻します。参照先の名前も自動で変わります。
+  5. テーブルと一緒に消えた索引を作り直します。
+
+  この手順は、2026-10-31 にローカルの D1 で、今のスキーマの全テーブルを使って確かめました。行が残り、作り直した後も連鎖削除が動きます。
+
+`tests/migrations.test.ts` は、すべてのテーブルに 1 行ずつ入れた状態で各マイグレーションを実行し、行数が変わると失敗します。新しいテーブルを追加したら、テストの `seedRows` にも 1 行を足します。テーブルの廃止やデータの移行で行数が変わるのが正しいときは、テストを変え、理由を PR に書きます。
+
+### マイグレーション前の復旧点
+
+デプロイの job は、`npm run db:apply` の前に `wrangler d1 time-travel info kintai-note` を実行し、その時点のブックマークを job のログに残します。取得に失敗すると、マイグレーションもデプロイも実行しません。ログの見方：GitHub の Actions で該当の run を開き、`Deploy production` の `Apply schema and deploy Worker` にある `The current bookmark is` の行を探します。job を再実行した run では、最初の attempt のログを見ます。再実行で記録されるのは、マイグレーションの適用後のブックマークです。
+
+本番を戻すときは、`docs/security-review.md` の「本番D1の復旧手順」に従います。この手順は、書き込みの止め方が決まるまで（#49）本番では実行できません。戻す前に、次の 2 点を確かめます。
+
+- 原因のマイグレーションを `main` から取り除きます。適用の記録（`d1_migrations`）も一緒に戻るので、ファイルが残っていると次のデプロイで再び適用されます。
+- 同じ job でデプロイした Worker が、戻した後のスキーマで動くかを確かめます。動かないなら、Worker も前の版に戻します。
+
+ブックマークは Time Travel で戻せる期間（#49 で確認）を過ぎると使えません。
 
 ## 参考
 
