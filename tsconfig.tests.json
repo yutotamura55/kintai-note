@@ -1,0 +1,16 @@
+{
+  // Tests and scripts import server and shared code, so they use the server settings and the Workers types.
+  "extends": "./.nuxt/tsconfig.server.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "./.nuxt/tsconfig.tests.tsbuildinfo"
+  },
+  "include": [
+    "tests/**/*",
+    "scripts/**/*",
+    "eslint.config.mjs",
+    ".nuxt/types/nitro-nuxt.d.ts",
+    ".nuxt/types/nitro.d.ts",
+    "server/worker-runtime.d.ts",
+    "server/cloudflare-env.d.ts"
+  ]
+}
