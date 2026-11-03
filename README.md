@@ -46,7 +46,7 @@ npm run test:unit
 
 ### ホストで直接開発する場合
 
-1. Node.js 22.22.3 以上（24 系なら 24.15.0 以上）を用意して `npm install`。Nuxt 4.6 がこの版を求めます。
+1. Node.js 22 系の 22.22.3 以上、または 24 系の 24.15.0 以上を用意して `npm install`。Nuxt 4.6 がこの版を求めます。
 2. Cloudflare に D1 データベースを作成し、その ID を `wrangler.jsonc` の `database_id` に設定。
 3. `npm run db:local:apply` でローカル DB の初期スキーマとマイグレーションを適用。
 4. `.dev.vars.example` を `.dev.vars` として複製し、初期管理者作成用トークンを設定。
@@ -66,7 +66,7 @@ npm run check
 | --- | --- | --- | --- |
 | 1 | 書式が Prettier の整形どおりかの確認 | `npm run format:check` | `npm run format` |
 | 2 | ESLint（Nuxt の推奨ルール `@nuxt/eslint-config`）による誤りの検出 | `npm run lint` | `npx eslint . --fix`（自動で直せる指摘だけ） |
-| 3 | 型検査（`nuxt typecheck`、vue-tsc）。画面・サーバー・共有コード・設定ファイル・テスト・スクリプトが対象 | `npm run typecheck` | なし |
+| 3 | 型検査（`nuxt typecheck`、vue-tsc）。画面・サーバー・共有コード・設定ファイル・テストが対象 | `npm run typecheck` | なし |
 
 GitHub Actions の `Static checks` ジョブでも同じ `npm run check` を実行し、失敗すると本番デプロイは行われません。
 
@@ -77,7 +77,7 @@ GitHub Actions の `Static checks` ジョブでも同じ `npm run check` を実�
 | `server/worker-runtime.d.ts` | `D1Database` などの Workers の実行環境の型 | `wrangler.jsonc` の互換日付・互換フラグを変えたとき、Wrangler を更新したとき | `npm run types:workers` |
 | `server/cloudflare-env.d.ts` | `DB` などのバインディングを持つ `Env` の型 | `wrangler.jsonc` のバインディングを変えたとき | ファイルの 2 行目に書かれたコマンド（`wrangler types --include-runtime=false server/cloudflare-env.d.ts`） |
 
-`tsconfig.json` は、Nuxt が `.nuxt/` に生成する画面・サーバー・共有コード・設定ファイル用の 4 つの設定と、テストとスクリプト用の `tsconfig.tests.json` を参照し、`nuxt typecheck` がまとめて検査します。画面の検査は `useRequestFetch` の応答の型を通じてサーバーのコードも読むため、`nuxt.config.ts` の `typescript.tsConfig.files` で上の 2 つの型のファイルも渡しています。
+`tsconfig.json` は、Nuxt が `.nuxt/` に生成する画面・サーバー・共有コード・設定ファイル用の 4 つの設定と、テスト用の `tsconfig.tests.json` を参照し、`nuxt typecheck` がまとめて検査します。画面の検査は `useRequestFetch` の応答の型を通じてサーバーのコードも読むため、`nuxt.config.ts` の `typescript.tsConfig.files` で上の 2 つの型のファイルも渡しています。
 
 `npm run typecheck` は最初に `server/worker-runtime.d.ts` が `wrangler.jsonc` の互換日付・フラグと合っているかを確かめ、合っていなければ失敗します。`server/cloudflare-env.d.ts` は、ビルドの成果物と `.dev.vars` の有無で生成結果が変わるため、この確認の対象にしていません。
 
@@ -102,7 +102,7 @@ GitHub Actions の `Static checks` ジョブでも同じ `npm run check` を実�
 
 ## ローカル検証
 
-Node.js 22.22.3 以上を使って、次のコマンドを実行します。
+Node.js 22 系の 22.22.3 以上を使って、次のコマンドを実行します。
 
 ```bash
 source ~/.nvm/nvm.sh

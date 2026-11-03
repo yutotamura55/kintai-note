@@ -1,5 +1,6 @@
 {
-  // Tests and scripts import server and shared code, so they use the server settings and the Workers types.
+  // Tests import server and shared code, so they use the server settings and the Workers types.
+  // scripts/*.mjs are read as on main, but checkJs is off, so their JavaScript is not type-checked.
   "extends": "./.nuxt/tsconfig.server.json",
   "compilerOptions": {
     "tsBuildInfoFile": "./.nuxt/tsconfig.tests.tsbuildinfo"
