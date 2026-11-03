@@ -18,7 +18,7 @@ const script = stripTypeScriptTypes(source.replace(/^import [\s\S]*? from '[^']*
   'export default ',
   'return ',
 )
-const fontBytes = readFileSync(new URL('../app/public/fonts/NotoSansJP-Regular.ttf', import.meta.url))
+const fontBytes = readFileSync(new URL('../public/fonts/NotoSansJP-Regular.ttf', import.meta.url))
 const rows = [
   {
     work_date: '2026-09-16',
