@@ -2,17 +2,11 @@
   "format": "shipkeep-dismissed/1",
   "items": [
     {
-      "tool": "shipkeep-publish-check",
-      "id": "history_personal_data",
-      "reason": "#58 で決定（2026-11-01）：履歴は書き換えない。パスに含まれるのはローカルのユーザー名だけで、リポジトリは公開済み。書き換えると 14cc7ce に固定した permalink が開けなくなる。",
-      "dismissed_on": "2026-11-06",
-      "issue": 58
-    },
-    {
       "tool": "shipkeep-quality-tools",
       "id": "dependency_audit/repository",
-      "reason": "dependency_audit/javascript と同じ作業（npm audit の導入）のため、別の Issue にしない。リポジトリ全体の判定は yutotamura55/shipkeep#44 で直す。",
-      "dismissed_on": "2026-11-06"
+      "reason": "dependency_audit/javascript（#95、npm audit の導入）と同じ作業のため、別の Issue にしない。リポジトリ全体の判定は shipkeep の Issue 44 で直す。#95 が片付いたら、この項目を外すかを見直す。",
+      "dismissed_on": "2026-11-06",
+      "issue": 95
     }
   ]
 }
