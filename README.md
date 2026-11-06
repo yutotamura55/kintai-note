@@ -81,6 +81,10 @@ GitHub Actions の `Static checks` ジョブでも同じ `npm run check` を実�
 
 `npm run typecheck` は最初に `server/worker-runtime.d.ts` が `wrangler.jsonc` の互換日付・フラグと合っているかを確かめ、合っていなければ失敗します。`server/cloudflare-env.d.ts` は、ビルドの成果物と `.dev.vars` の有無で生成結果が変わるため、この確認の対象にしていません。
 
+### 依存の変更の確認（プルリクエスト）
+
+プルリクエストでは、GitHub Actions の `Dependency review` ジョブ（`.github/workflows/dependency-review.yml`）が、PR で加えたり版を変えたりした依存を、GitHub の脆弱性のデータベースと照合します。本番で使う依存（runtime）に、重大度が high 以上の既知の脆弱性があると失敗します。結果は、ワークフローの実行の Summary に表示されます。
+
 ### 検査の対象外と例外
 
 | 対象 | 内容 | 理由 |
