@@ -1,0 +1,189 @@
+{
+  "format": "shipkeep-result/1",
+  "tool": {
+    "name": "shipkeep-publish-check"
+  },
+  "generated_at": "2026-11-06T03:35:22+00:00",
+  "counts": {
+    "pass": 10,
+    "fail": 3,
+    "not_applicable": 1
+  },
+  "items": [
+    {
+      "id": "history_coverage",
+      "check": "history_coverage",
+      "status": "pass",
+      "confidence": "confirmed",
+      "summary": "手元の複製に履歴がすべてある",
+      "evidence": []
+    },
+    {
+      "id": "commit_identity",
+      "check": "commit_identity",
+      "status": "pass",
+      "confidence": "confirmed",
+      "summary": "すべてのコミットが GitHub の noreply のアドレスを使っている",
+      "evidence": []
+    },
+    {
+      "id": "history_secrets",
+      "check": "history_secrets",
+      "status": "pass",
+      "confidence": "likely",
+      "summary": "組み込みの秘密情報のパターンに合う追加行はない",
+      "evidence": []
+    },
+    {
+      "id": "history_personal_data",
+      "check": "history_personal_data",
+      "status": "fail",
+      "confidence": "likely",
+      "summary": "履歴の 7 か所に個人情報がある",
+      "evidence": [
+        {
+          "kind": "local_path",
+          "commit": "14cc7ce3dbc1",
+          "path": "docs/security-review.md",
+          "line": 23,
+          "context": "- [activate-options.post.ts](<local_path>)"
+        },
+        {
+          "kind": "local_path",
+          "commit": "14cc7ce3dbc1",
+          "path": "docs/security-review.md",
+          "line": 24,
+          "context": "- [webauthn.ts](<local_path>)"
+        },
+        {
+          "kind": "local_path",
+          "commit": "14cc7ce3dbc1",
+          "path": "docs/security-review.md",
+          "line": 25,
+          "context": "- [activate-verify.post.ts](<local_path>)"
+        },
+        {
+          "kind": "local_path",
+          "commit": "14cc7ce3dbc1",
+          "path": "docs/security-review.md",
+          "line": 31,
+          "context": "ログアウト処理はブラウザCookieを削除するだけで、D1の` sessions`行を削除していません。[auth.ts](<local_path>)"
+        },
+        {
+          "kind": "local_path",
+          "commit": "14cc7ce3dbc1",
+          "path": "docs/security-review.md",
+          "line": 39,
+          "context": "チャレンジ消費は`SELECT`と`DELETE`という別々の操作です。[webauthn.ts](<local_path>)"
+        },
+        {
+          "kind": "local_path",
+          "commit": "14cc7ce3dbc1",
+          "path": "docs/security-review.md",
+          "line": 47,
+          "context": "初期ユーザーが0人であることをSELECTで確認してから、別のINSERTを実行しています。[bootstrap.post.ts](<local_path>)"
+        },
+        {
+          "kind": "local_path",
+          "commit": "14cc7ce3dbc1",
+          "path": "docs/security-review.md",
+          "line": 53,
+          "context": "ログインオプション、招待トークン検証、初期管理者セットアップなどに明示的なレート制限がありません。ログインオプション生成のたびに5分間有効な行が`auth_challenges`へ追加され、期限切れ行はログイン成功時の処理でしかまとめて削除されません。[webauthn.ts](<local_path>)"
+        }
+      ],
+      "severity": "high",
+      "remediation": "ファイルを直して履歴を書き換える。利用者が公開してよいと決めたときは、そのままにする"
+    },
+    {
+      "id": "denylist",
+      "check": "denylist",
+      "status": "not_applicable",
+      "confidence": "likely",
+      "summary": "禁止語の一覧が指定されていない",
+      "evidence": []
+    },
+    {
+      "id": "sensitive_files",
+      "check": "sensitive_files",
+      "status": "pass",
+      "confidence": "confirmed",
+      "summary": "公開してはいけないファイルはコミットされていない",
+      "evidence": []
+    },
+    {
+      "id": "env_files",
+      "check": "env_files",
+      "status": "pass",
+      "confidence": "confirmed",
+      "summary": "ローカルの env ファイルは ignore され、例のファイルがコミットされている",
+      "evidence": []
+    },
+    {
+      "id": "license",
+      "check": "license",
+      "status": "pass",
+      "confidence": "confirmed",
+      "summary": "HEAD にライセンスのファイルがある：LICENSE",
+      "evidence": []
+    },
+    {
+      "id": "readme",
+      "check": "readme",
+      "status": "pass",
+      "confidence": "confirmed",
+      "summary": "HEAD に README がある：README.md",
+      "evidence": []
+    },
+    {
+      "id": "security_policy",
+      "check": "security_policy",
+      "status": "fail",
+      "confidence": "confirmed",
+      "summary": "HEAD の最上位、.github/、docs/ のどこにも SECURITY.md がない",
+      "evidence": [],
+      "severity": "low",
+      "remediation": "脆弱性の報告の仕方を書く。例えば GitHub の非公開の報告を案内し、個人のメールアドレスは書かない"
+    },
+    {
+      "id": "github_settings",
+      "check": "github_settings",
+      "status": "pass",
+      "confidence": "confirmed",
+      "summary": "秘密情報のスキャンと push protection が有効",
+      "evidence": []
+    },
+    {
+      "id": "private_reporting",
+      "check": "private_reporting",
+      "status": "fail",
+      "confidence": "confirmed",
+      "summary": "脆弱性の非公開の報告（private vulnerability reporting）が無効",
+      "evidence": [
+        {
+          "kind": "private_reporting_disabled"
+        }
+      ],
+      "severity": "medium",
+      "remediation": "Settings → Advanced Security で有効にする。非公開のリポジトリでは、公開したらすぐに有効にする"
+    },
+    {
+      "id": "dependabot_alerts",
+      "check": "dependabot_alerts",
+      "status": "pass",
+      "confidence": "confirmed",
+      "summary": "Dependabot alerts が有効",
+      "evidence": []
+    },
+    {
+      "id": "workflow_token",
+      "check": "workflow_token",
+      "status": "pass",
+      "confidence": "confirmed",
+      "summary": "既定の GITHUB_TOKEN は読み取りだけができる",
+      "evidence": []
+    }
+  ],
+  "target": {
+    "commit": "7d14e4eda1ee8c17b3f89a10bcd4e3175a1d7672"
+  }
+}

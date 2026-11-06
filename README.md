@@ -89,6 +89,7 @@ GitHub Actions の `Static checks` ジョブでも同じ `npm run check` を実�
 | ESLint | 生成ファイル 2 つを検査しない（`eslint.config.mjs`） | 同上 |
 | ESLint | 書式に関わるルールを `eslint-config-prettier` で外す | 書式は Prettier が決め、両者が逆向きに直し合わないようにするため（例：`vue/html-self-closing`） |
 | ESLint | `tests/` だけ `@typescript-eslint/no-explicit-any` と `@typescript-eslint/no-unsafe-function-type` を外す | テストは製品のソースを `new Function` で評価し、手作りの偽の部品を渡すため、扱う値に型がない |
+| shipkeep | リポジトリ全体の依存の監査（`dependency_audit/repository`）を Issue にしない（`.shipkeep/dismissed.json`） | JavaScript の依存の監査（#95）と同じ作業のため。#95 が片付いたら見直す |
 
 書式を一括で整えたコミット（PR #46）は `.git-blame-ignore-revs` に登録しています。GitHub の blame 画面ではこのコミットが飛ばされます。手元の `git blame` で飛ばすには、一度だけ `git config blame.ignoreRevsFile .git-blame-ignore-revs` を実行してください。
 

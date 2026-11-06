@@ -1,0 +1,460 @@
+{
+  "format": "shipkeep-result/1",
+  "tool": {
+    "name": "shipkeep-quality-tools"
+  },
+  "generated_at": "2026-11-06T03:35:22+00:00",
+  "counts": {
+    "info": 2,
+    "pass": 7,
+    "fail": 11,
+    "unknown": 10,
+    "not_applicable": 2
+  },
+  "items": [
+    {
+      "id": "language/javascript",
+      "check": "language",
+      "scope": "javascript",
+      "status": "info",
+      "confidence": "likely",
+      "summary": "JavaScript / TypeScript（プロジェクトのファイルで検出）",
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "package.json"
+        }
+      ]
+    },
+    {
+      "id": "language/terraform",
+      "check": "language",
+      "scope": "terraform",
+      "status": "info",
+      "confidence": "likely",
+      "summary": "Terraform（ソースファイルだけで検出）。参照の資料がないため、道具を調べる",
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "iac/main.tf"
+        },
+        {
+          "kind": "file",
+          "path": "iac/outputs.tf"
+        },
+        {
+          "kind": "file",
+          "path": "iac/variables.tf"
+        },
+        {
+          "kind": "file",
+          "path": "iac/versions.tf"
+        }
+      ]
+    },
+    {
+      "id": "format/javascript",
+      "check": "format",
+      "scope": "javascript",
+      "status": "pass",
+      "confidence": "likely",
+      "summary": "JavaScript / TypeScript の整形の道具がある（prettier）",
+      "evidence": [
+        {
+          "kind": "file",
+          "path": ".prettierrc.json"
+        },
+        {
+          "kind": "file",
+          "path": "package.json"
+        },
+        {
+          "kind": "tools",
+          "detail": "prettier"
+        }
+      ]
+    },
+    {
+      "id": "lint/javascript",
+      "check": "lint",
+      "scope": "javascript",
+      "status": "pass",
+      "confidence": "likely",
+      "summary": "JavaScript / TypeScript の lint の道具がある（eslint）",
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "eslint.config.mjs"
+        },
+        {
+          "kind": "file",
+          "path": "package.json"
+        },
+        {
+          "kind": "tools",
+          "detail": "eslint"
+        }
+      ]
+    },
+    {
+      "id": "type_check/javascript",
+      "check": "type_check",
+      "scope": "javascript",
+      "status": "pass",
+      "confidence": "likely",
+      "summary": "JavaScript / TypeScript の型検査の道具がある（typescript）",
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "package.json"
+        },
+        {
+          "kind": "tools",
+          "detail": "typescript"
+        }
+      ]
+    },
+    {
+      "id": "security_lint/javascript",
+      "check": "security_lint",
+      "scope": "javascript",
+      "status": "fail",
+      "confidence": "likely",
+      "summary": "JavaScript / TypeScript のセキュリティの lint の道具が見つからない",
+      "evidence": [],
+      "severity": "medium",
+      "remediation": "shipkeep-quality-tools の references/javascript.md がセキュリティの lint に勧める道具を使う：「Semgrep/Opengrep from the common layer」。共通の層（common layer）の道具は references/common.md を見る。入れるときに最新のバージョンを確かめる。検査コマンドから実行し、そのコマンドを CI でも実行する"
+    },
+    {
+      "id": "tests/javascript",
+      "check": "tests",
+      "scope": "javascript",
+      "status": "pass",
+      "confidence": "likely",
+      "summary": "JavaScript / TypeScript のテストの道具がある（playwright, node:test, test files）",
+      "evidence": [
+        {
+          "kind": "file",
+          "path": ".github/workflows/ci.yml"
+        },
+        {
+          "kind": "file",
+          "path": "package.json"
+        },
+        {
+          "kind": "file",
+          "path": "tests/attendance-edit.test.ts"
+        },
+        {
+          "kind": "file",
+          "path": "tests/attendance-punch.test.ts"
+        },
+        {
+          "kind": "file",
+          "path": "tests/attendance-update.test.ts"
+        },
+        {
+          "kind": "tools",
+          "detail": "playwright, node:test, test files"
+        }
+      ]
+    },
+    {
+      "id": "coverage/javascript",
+      "check": "coverage",
+      "scope": "javascript",
+      "status": "fail",
+      "confidence": "likely",
+      "summary": "JavaScript / TypeScript のカバレッジの道具が見つからない",
+      "evidence": [],
+      "severity": "low",
+      "remediation": "shipkeep-quality-tools の references/javascript.md がカバレッジに勧める道具を使う：「Vitest coverage (@vitest/coverage-v8), with a Cobertura report for diff coverage」。入れるときに最新のバージョンを確かめる。検査コマンドから実行し、そのコマンドを CI でも実行する"
+    },
+    {
+      "id": "unused_code/javascript",
+      "check": "unused_code",
+      "scope": "javascript",
+      "status": "fail",
+      "confidence": "likely",
+      "summary": "JavaScript / TypeScript の未使用のコードの検出の道具が見つからない",
+      "evidence": [],
+      "severity": "low",
+      "remediation": "shipkeep-quality-tools の references/javascript.md が未使用のコードの検出に勧める道具を使う：「Knip (unused files and exports)」。入れるときに最新のバージョンを確かめる。検査コマンドから実行し、そのコマンドを CI でも実行する"
+    },
+    {
+      "id": "unused_dependencies/javascript",
+      "check": "unused_dependencies",
+      "scope": "javascript",
+      "status": "fail",
+      "confidence": "likely",
+      "summary": "JavaScript / TypeScript の未使用の依存の検出の道具が見つからない",
+      "evidence": [],
+      "severity": "low",
+      "remediation": "shipkeep-quality-tools の references/javascript.md が未使用の依存の検出に勧める道具を使う：「Knip (the same tool covers both)」。入れるときに最新のバージョンを確かめる。検査コマンドから実行し、そのコマンドを CI でも実行する"
+    },
+    {
+      "id": "dependency_audit/javascript",
+      "check": "dependency_audit",
+      "scope": "javascript",
+      "status": "fail",
+      "confidence": "likely",
+      "summary": "JavaScript / TypeScript の依存の監査の道具が見つからない",
+      "evidence": [],
+      "severity": "medium",
+      "remediation": "shipkeep-quality-tools の references/javascript.md が依存の監査に勧める道具を使う：「npm audit (or the package manager's equivalent)」。入れるときに最新のバージョンを確かめる。検査コマンドから実行し、そのコマンドを CI でも実行する"
+    },
+    {
+      "id": "format/terraform",
+      "check": "format",
+      "scope": "terraform",
+      "status": "unknown",
+      "confidence": "likely",
+      "summary": "Terraform の整形を判定できない",
+      "evidence": [],
+      "note": "この言語の参照の資料がない。道具を調べる",
+      "remediation": "references/other-languages.md の手順でこの言語の道具を調べ、出典を示す"
+    },
+    {
+      "id": "lint/terraform",
+      "check": "lint",
+      "scope": "terraform",
+      "status": "unknown",
+      "confidence": "likely",
+      "summary": "Terraform の lint を判定できない",
+      "evidence": [],
+      "note": "この言語の参照の資料がない。道具を調べる",
+      "remediation": "references/other-languages.md の手順でこの言語の道具を調べ、出典を示す"
+    },
+    {
+      "id": "type_check/terraform",
+      "check": "type_check",
+      "scope": "terraform",
+      "status": "unknown",
+      "confidence": "likely",
+      "summary": "Terraform の型検査を判定できない",
+      "evidence": [],
+      "note": "この言語の参照の資料がない。道具を調べる",
+      "remediation": "references/other-languages.md の手順でこの言語の道具を調べ、出典を示す"
+    },
+    {
+      "id": "security_lint/terraform",
+      "check": "security_lint",
+      "scope": "terraform",
+      "status": "unknown",
+      "confidence": "likely",
+      "summary": "Terraform のセキュリティの lint を判定できない",
+      "evidence": [],
+      "note": "この言語の参照の資料がない。道具を調べる",
+      "remediation": "references/other-languages.md の手順でこの言語の道具を調べ、出典を示す"
+    },
+    {
+      "id": "tests/terraform",
+      "check": "tests",
+      "scope": "terraform",
+      "status": "unknown",
+      "confidence": "likely",
+      "summary": "Terraform のテストを判定できない",
+      "evidence": [],
+      "note": "この言語の参照の資料がない。道具を調べる",
+      "remediation": "references/other-languages.md の手順でこの言語の道具を調べ、出典を示す"
+    },
+    {
+      "id": "coverage/terraform",
+      "check": "coverage",
+      "scope": "terraform",
+      "status": "unknown",
+      "confidence": "likely",
+      "summary": "Terraform のカバレッジを判定できない",
+      "evidence": [],
+      "note": "この言語の参照の資料がない。道具を調べる",
+      "remediation": "references/other-languages.md の手順でこの言語の道具を調べ、出典を示す"
+    },
+    {
+      "id": "unused_code/terraform",
+      "check": "unused_code",
+      "scope": "terraform",
+      "status": "unknown",
+      "confidence": "likely",
+      "summary": "Terraform の未使用のコードの検出を判定できない",
+      "evidence": [],
+      "note": "この言語の参照の資料がない。道具を調べる",
+      "remediation": "references/other-languages.md の手順でこの言語の道具を調べ、出典を示す"
+    },
+    {
+      "id": "unused_dependencies/terraform",
+      "check": "unused_dependencies",
+      "scope": "terraform",
+      "status": "unknown",
+      "confidence": "likely",
+      "summary": "Terraform の未使用の依存の検出を判定できない",
+      "evidence": [],
+      "note": "この言語の参照の資料がない。道具を調べる",
+      "remediation": "references/other-languages.md の手順でこの言語の道具を調べ、出典を示す"
+    },
+    {
+      "id": "dependency_audit/terraform",
+      "check": "dependency_audit",
+      "scope": "terraform",
+      "status": "unknown",
+      "confidence": "likely",
+      "summary": "Terraform の依存の監査を判定できない",
+      "evidence": [],
+      "note": "この言語の参照の資料がない。道具を調べる",
+      "remediation": "references/other-languages.md の手順でこの言語の道具を調べ、出典を示す"
+    },
+    {
+      "id": "check_command/repository",
+      "check": "check_command",
+      "scope": "repository",
+      "status": "pass",
+      "confidence": "likely",
+      "summary": "リポジトリ全体の検査コマンドの道具がある（npm run check）",
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "package.json"
+        },
+        {
+          "kind": "tools",
+          "detail": "npm run check"
+        }
+      ]
+    },
+    {
+      "id": "ci/repository",
+      "check": "ci",
+      "scope": "repository",
+      "status": "pass",
+      "confidence": "likely",
+      "summary": "リポジトリ全体の CI の道具がある（GitHub Actions）",
+      "evidence": [
+        {
+          "kind": "file",
+          "path": ".github/workflows/ci.yml"
+        },
+        {
+          "kind": "tools",
+          "detail": "GitHub Actions"
+        }
+      ]
+    },
+    {
+      "id": "workflow_lint/repository",
+      "check": "workflow_lint",
+      "scope": "repository",
+      "status": "fail",
+      "confidence": "likely",
+      "summary": "リポジトリ全体のワークフローの lint の道具が見つからない",
+      "evidence": [],
+      "severity": "low",
+      "remediation": "検査コマンドから、ワークフローに actionlint を実行する（references/common.md）"
+    },
+    {
+      "id": "workflow_security/repository",
+      "check": "workflow_security",
+      "scope": "repository",
+      "status": "fail",
+      "confidence": "likely",
+      "summary": "リポジトリ全体のワークフローのセキュリティ検査の道具が見つからない",
+      "evidence": [],
+      "severity": "medium",
+      "remediation": "検査コマンドから、ワークフローに zizmor を実行する（references/common.md）"
+    },
+    {
+      "id": "sast/repository",
+      "check": "sast",
+      "scope": "repository",
+      "status": "fail",
+      "confidence": "likely",
+      "summary": "リポジトリ全体の静的解析（SAST）の道具が見つからない",
+      "evidence": [],
+      "severity": "medium",
+      "remediation": "検査コマンドから Semgrep CE か Opengrep を実行する。規則は写さず、実行のたびに取得する（references/common.md）"
+    },
+    {
+      "id": "codeql/repository",
+      "check": "codeql",
+      "scope": "repository",
+      "status": "unknown",
+      "confidence": "likely",
+      "summary": "リポジトリ全体の CodeQL を判定できない",
+      "evidence": [],
+      "note": "CodeQL のワークフローがない。GitHub の設定で default setup を確かめる",
+      "remediation": "Settings → Advanced Security で CodeQL の default setup が有効かを確かめる。リポジトリが code scanning を使えるなら有効にする（references/common.md）"
+    },
+    {
+      "id": "dependency_audit/repository",
+      "check": "dependency_audit",
+      "scope": "repository",
+      "status": "fail",
+      "confidence": "likely",
+      "summary": "リポジトリ全体の依存の監査の道具が見つからない",
+      "evidence": [],
+      "severity": "medium",
+      "remediation": "各言語の依存を、その言語の道具（pip-audit や npm audit など）で検査コマンドから監査する。その道具がない言語や、言語をまとめて 1 つの報告にしたいときは OSV-Scanner を使う（references/common.md の Dependencies）"
+    },
+    {
+      "id": "dependency_updates/repository",
+      "check": "dependency_updates",
+      "scope": "repository",
+      "status": "pass",
+      "confidence": "likely",
+      "summary": "リポジトリ全体の依存の更新の道具がある（dependabot）",
+      "evidence": [
+        {
+          "kind": "file",
+          "path": ".github/dependabot.yml"
+        },
+        {
+          "kind": "tools",
+          "detail": "dependabot"
+        }
+      ]
+    },
+    {
+      "id": "dependency_review/repository",
+      "check": "dependency_review",
+      "scope": "repository",
+      "status": "fail",
+      "confidence": "likely",
+      "summary": "リポジトリ全体の依存の変更の確認（dependency review）の道具が見つからない",
+      "evidence": [],
+      "severity": "medium",
+      "remediation": "dependency graph を有効にしてから、プルリクエストのワークフローに actions/dependency-review-action をコミットの SHA で固定して追加する（references/common.md の Dependencies）"
+    },
+    {
+      "id": "diff_coverage/repository",
+      "check": "diff_coverage",
+      "scope": "repository",
+      "status": "fail",
+      "confidence": "likely",
+      "summary": "リポジトリ全体の差分のカバレッジの道具が見つからない",
+      "evidence": [],
+      "severity": "low",
+      "remediation": "Cobertura 形式のカバレッジの報告を書き出し、CI でプルリクエストのベースブランチとの差分に diff-cover を実行する（references/common.md の Coverage）"
+    },
+    {
+      "id": "custom_rules/repository",
+      "check": "custom_rules",
+      "scope": "repository",
+      "status": "not_applicable",
+      "confidence": "likely",
+      "summary": "リポジトリ全体のプロジェクト独自の規則は対象外",
+      "evidence": [],
+      "note": "プロジェクト独自の規則のファイルがない。点検で同じ型の問題がくり返し見つかったときに提案する"
+    },
+    {
+      "id": "baseline/repository",
+      "check": "baseline",
+      "scope": "repository",
+      "status": "not_applicable",
+      "confidence": "likely",
+      "summary": "リポジトリ全体のベースラインは対象外",
+      "evidence": [],
+      "note": "ベースラインのファイルがない。新しい規則が既存のコードで失敗するときに提案する"
+    }
+  ],
+  "target": {
+    "commit": "7d14e4eda1ee8c17b3f89a10bcd4e3175a1d7672"
+  }
+}

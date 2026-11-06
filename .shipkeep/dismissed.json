@@ -1,0 +1,12 @@
+{
+  "format": "shipkeep-dismissed/1",
+  "items": [
+    {
+      "tool": "shipkeep-quality-tools",
+      "id": "dependency_audit/repository",
+      "reason": "dependency_audit/javascript（#95、npm audit の導入）と同じ作業のため、別の Issue にしない。リポジトリ全体の判定は shipkeep の Issue 44 で直す。#95 が片付いたら、この項目を外すかを見直す。",
+      "dismissed_on": "2026-11-06",
+      "issue": 95
+    }
+  ]
+}
