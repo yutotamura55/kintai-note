@@ -77,7 +77,7 @@ async function page(
   }
   const state = await new AsyncFunction(
     ...Object.keys(dependencies),
-    `${script}\nreturn { me, today, error, busy, displayedRecord, punchRecord, previousOpen, clockedOutPrevious, correctionLink, load, clock, logout, displayJapanDateTime, currentState, isOnBreak, statusInfo, canPerform, breakMinutes, workMinutes, formatDurationHuman, ...(typeof loadError !== 'undefined' ? {loadError} : {}), ...(typeof loading !== 'undefined' ? {loading} : {}) }`,
+    `${script}\nreturn { me, today, error, busy, displayedRecord, punchRecord, previousOpen, load, clock, logout, displayJapanDateTime, currentState, isOnBreak, statusInfo, canPerform, breakMinutes, workMinutes, formatDurationHuman, ...(typeof loadError !== 'undefined' ? {loadError} : {}), ...(typeof loading !== 'undefined' ? {loading} : {}) }`,
   )(...Object.values(dependencies))
   return {
     state: proxyRefs(state),
@@ -448,94 +448,27 @@ function editLinks(html: string) {
     .map((match) => JSON.parse(match[1].replaceAll('&quot;', '"').replaceAll('&amp;', '&')))
     .filter((to) => typeof to === 'object' && to?.query?.edit)
 }
-// A shift left open on the last day of the previous month, so its month differs from today's.
-// By default the clock request succeeds and closes the shift; `post` can replace that.
-function forgottenShiftView(post: (close: () => void) => Promise<unknown> = async (close) => close()) {
-  let clockedOut = false
-  const unfinished = {
-    date: '2026-09-01',
-    record: null,
-    openRecord: {
-      id: 'shift-a',
-      work_date: '2026-08-31',
-      clock_in_at: '2026-08-31T00:00:00.000Z',
-      clock_out_at: null,
-      original_clock_in_at: '2026-08-31T00:00:00.000Z',
-      original_clock_out_at: null,
-      break_started_at: null,
-    },
-  }
-  return page(
-    async (path: string) =>
-      path === '/api/auth/me'
-        ? { display_name: 'Test', role: 'member' }
-        : clockedOut
-          ? { date: '2026-09-01', record: null, openRecord: null }
-          : unfinished,
-    async () =>
-      post(() => {
-        clockedOut = true
-      }),
-  )
-}
 
 test('the unfinished-shift notice offers no edit link before the shift is clocked out', async () => {
   // Editing the clock-out first neither ends the shift nor survives the later clock-out.
-  const view = await forgottenShiftView()
+  const view = await page(async (path: string) =>
+    path === '/api/auth/me'
+      ? { display_name: 'Test', role: 'member' }
+      : {
+          date: '2026-09-01',
+          record: null,
+          openRecord: {
+            id: 'shift-a',
+            work_date: '2026-08-31',
+            clock_in_at: '2026-08-31T00:00:00.000Z',
+            clock_out_at: null,
+            original_clock_in_at: '2026-08-31T00:00:00.000Z',
+            original_clock_out_at: null,
+            break_started_at: null,
+          },
+        },
+  )
   const html = await view.html()
   assert.match(html, /前回の勤務が未退勤です/)
   assert.deepEqual(editLinks(html), [])
-})
-
-test('clocking out a previous-day shift then links to editing that shift', async () => {
-  const view = await forgottenShiftView()
-  await view.state.clock('out')
-  const html = await view.html()
-  assert.doesNotMatch(html, /前回の勤務が未退勤です/)
-  assert.deepEqual(editLinks(html), [{ path: '/records', query: { month: '2026-08', edit: 'shift-a' } }])
-})
-
-test('a rejected clock-out shows no edit link even when the shift was closed elsewhere', async () => {
-  // Another tab clocked the shift out first, so this request is rejected and the reload shows
-  // no open shift. This page did not record the clock-out, so it must not claim it did.
-  const view = await forgottenShiftView(async (close) => {
-    close()
-    throw { data: { statusMessage: '記録が更新されたか、先に退勤すべき勤務があるか、出勤日時が現在以降です。' } }
-  })
-  await view.state.clock('out')
-  const html = await view.html()
-  assert.doesNotMatch(html, /前回の勤務が未退勤です/)
-  assert.match(html, /記録が更新されたか/)
-  assert.deepEqual(editLinks(html), [])
-})
-
-test('clocking out a shift of the current work day shows no edit link', async () => {
-  let clockedOut = false
-  const open = {
-    id: 'shift-b',
-    work_date: '2026-09-18',
-    clock_in_at: '2026-09-18T00:00:00.000Z',
-    clock_out_at: null,
-    original_clock_in_at: '2026-09-18T00:00:00.000Z',
-    original_clock_out_at: null,
-  }
-  const view = await page(
-    async (path: string) =>
-      path === '/api/auth/me'
-        ? { display_name: 'Test', role: 'member' }
-        : clockedOut
-          ? {
-              date: '2026-09-18',
-              record: { ...open, original_clock_out_at: '2026-09-18T08:00:00.000Z' },
-              openRecord: null,
-            }
-          : { date: '2026-09-18', record: open, openRecord: open },
-    async () => {
-      clockedOut = true
-      return {}
-    },
-  )
-  await view.state.clock('out')
-  assert.equal(view.state.currentState, 'done')
-  assert.deepEqual(editLinks(await view.html()), [])
 })
