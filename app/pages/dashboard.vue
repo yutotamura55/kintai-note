@@ -29,11 +29,15 @@ const punchRecord = computed(() => {
   return { ...record, clock_in_at: punch.clockInAt, clock_out_at: punch.clockOutAt }
 })
 const previousOpen = computed(() => today.value?.openRecord && today.value.openRecord.work_date !== today.value.date)
+// A previous-day shift this page has just clocked out. The link to correct its clock-out is
+// offered only after the punch: editing first does not end the shift (only a real clock-out
+// sets original_clock_out_at), and the later clock-out overwrites the edited time.
+const clockedOutPrevious = ref<Pick<AttendanceRecord, 'id' | 'work_date'>>()
 const correctionLink = computed(() => ({
   path: '/records',
   query: {
-    month: today.value?.openRecord?.work_date.slice(0, 7),
-    edit: today.value?.openRecord?.id,
+    month: clockedOutPrevious.value?.work_date.slice(0, 7),
+    edit: clockedOutPrevious.value?.id,
   },
 }))
 const currentState = computed(() => attendanceState(displayedRecord.value))
@@ -75,10 +79,12 @@ async function clock(action: 'in' | 'out' | 'break_start' | 'break_end') {
   try {
     if (loading.value) await load()
     const targetRecordId = today.value?.openRecord?.id || today.value?.record?.id
+    const previous = action === 'out' && previousOpen.value ? today.value?.openRecord : null
     await $fetch('/api/attendance/clock', {
       method: 'POST',
       body: { action, ...(action !== 'in' ? { recordId: targetRecordId } : {}) },
     })
+    if (previous) clockedOutPrevious.value = { id: previous.id, work_date: previous.work_date }
     await load()
   } catch (cause) {
     error.value = apiErrorMessage(cause, '打刻に失敗しました。')
@@ -135,9 +141,17 @@ onUnmounted(() => {
             <strong>前回の勤務が未退勤です（勤務日：{{ today.openRecord?.work_date }}）。</strong>
           </p>
           <p>
-            今まで勤務していた場合は「退勤を記録」を押してください。打刻を忘れていた場合は、実際の退勤日時を入力してください。
+            「退勤を記録」を押して、この勤務を終えてください。打刻を忘れていた場合も先に退勤を記録し、その後で退勤日時を実際の時刻に直してください。
           </p>
-          <NuxtLink :to="correctionLink">月別記録で退勤日時を入力する</NuxtLink>
+        </div>
+        <div v-else-if="clockedOutPrevious" class="attendance-warning" role="status">
+          <p>
+            <strong>前回の勤務（勤務日：{{ clockedOutPrevious.work_date }}）の退勤を記録しました。</strong>
+          </p>
+          <p>
+            退勤日時は、ボタンを押した時刻で記録しました。打刻を忘れていた場合は、実際に退勤した時刻に直してください。
+          </p>
+          <NuxtLink :to="correctionLink">月別記録で退勤日時を直す</NuxtLink>
         </div>
         <p v-if="displayedRecord">表示中の勤務日：{{ displayedRecord.work_date }}</p>
         <div class="times">

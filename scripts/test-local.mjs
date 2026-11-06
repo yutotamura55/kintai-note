@@ -208,11 +208,10 @@ try {
   )
   assert(dashboard.headers.get('referrer-policy') === 'no-referrer', 'Invitation URLs may leak through referrers.')
   const dashboardHtml = await dashboard.text()
+  // The edit link appears only after a clock-out: editing first would not end the shift.
   assert(
-    dashboard.status === 200 &&
-      dashboardHtml.includes('前回の勤務が未退勤です') &&
-      dashboardHtml.includes('month=2000-12'),
-    'Dashboard must render unfinished notice and link to its month.',
+    dashboard.status === 200 && dashboardHtml.includes('前回の勤務が未退勤です') && !dashboardHtml.includes('edit='),
+    'Dashboard must render the unfinished notice without an edit link before clock-out.',
   )
   const correctionPage = await request(`/records?month=2000-12&edit=${record.id}`)
   const correctionHtml = await correctionPage.text()

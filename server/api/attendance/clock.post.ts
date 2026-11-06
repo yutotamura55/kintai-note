@@ -8,7 +8,7 @@ const PUNCH_FAILURE_RESPONSES: Record<PunchFailure, { statusCode: 400 | 409; sta
   open_shift_exists: {
     statusCode: 409,
     statusMessage:
-      '未退勤の勤務があります。勤務中なら退勤を記録し、打刻忘れなら月別記録から実際の退勤日時を入力してください。',
+      '未退勤の勤務があります。先に「退勤を記録」を押して勤務を終えてください。打刻を忘れていた場合は、その後で月別記録の退勤日時を実際の時刻に直してください。',
   },
   already_clocked_in: { statusCode: 409, statusMessage: 'この勤務日はすでに出勤済みです。' },
   no_open_shift: { statusCode: 400, statusMessage: '勤務中の記録がありません。' },
