@@ -77,13 +77,13 @@ async function page(
   }
   const state = await new AsyncFunction(
     ...Object.keys(dependencies),
-    `${script}\nreturn { me, today, error, busy, displayedRecord, punchRecord, previousOpen, correctionLink, load, clock, logout, displayJapanDateTime, currentState, isOnBreak, statusInfo, canPerform, breakMinutes, workMinutes, formatDurationHuman, ...(typeof loadError !== 'undefined' ? {loadError} : {}), ...(typeof loading !== 'undefined' ? {loading} : {}) }`,
+    `${script}\nreturn { me, today, error, busy, displayedRecord, punchRecord, previousOpen, load, clock, logout, displayJapanDateTime, currentState, isOnBreak, statusInfo, canPerform, breakMinutes, workMinutes, formatDurationHuman, ...(typeof loadError !== 'undefined' ? {loadError} : {}), ...(typeof loading !== 'undefined' ? {loading} : {}) }`,
   )(...Object.values(dependencies))
   return {
     state: proxyRefs(state),
     html: () => {
       const app = createSSRApp({ setup: () => state, ssrRender: render })
-      app.component('NuxtLink', { template: '<a><slot /></a>' })
+      app.component('NuxtLink', { props: ['to'], template: '<a :data-to="JSON.stringify(to)"><slot /></a>' })
       return renderToString(app)
     },
   }
@@ -440,4 +440,35 @@ test('a clock-out entered on the month page is not shown until the shift is real
   assert.equal(view.state.currentState, 'working')
   assert.equal(view.state.punchRecord.clock_out_at, null)
   assert.doesNotMatch(html, /2026-09-18 18:00/, 'The edited clock-out must not appear as the punched clock-out.')
+})
+
+// Links to the month page that open a record's edit form, read from the NuxtLink stub.
+function editLinks(html: string) {
+  return [...html.matchAll(/<a data-to="([^"]*)"/g)]
+    .map((match) => JSON.parse(match[1].replaceAll('&quot;', '"').replaceAll('&amp;', '&')))
+    .filter((to) => typeof to === 'object' && to?.query?.edit)
+}
+
+test('the unfinished-shift notice offers no edit link before the shift is clocked out', async () => {
+  // Editing the clock-out first neither ends the shift nor survives the later clock-out.
+  const view = await page(async (path: string) =>
+    path === '/api/auth/me'
+      ? { display_name: 'Test', role: 'member' }
+      : {
+          date: '2026-09-01',
+          record: null,
+          openRecord: {
+            id: 'shift-a',
+            work_date: '2026-08-31',
+            clock_in_at: '2026-08-31T00:00:00.000Z',
+            clock_out_at: null,
+            original_clock_in_at: '2026-08-31T00:00:00.000Z',
+            original_clock_out_at: null,
+            break_started_at: null,
+          },
+        },
+  )
+  const html = await view.html()
+  assert.match(html, /前回の勤務が未退勤です/)
+  assert.deepEqual(editLinks(html), [])
 })
