@@ -1,0 +1,295 @@
+{
+  "format": "shipkeep-result/1",
+  "tool": {
+    "name": "shipkeep-refactor"
+  },
+  "generated_at": "2026-11-06T03:35:22+00:00",
+  "counts": {
+    "info": 20
+  },
+  "items": [
+    {
+      "id": "hotspot/scripts/test-local.mjs",
+      "check": "hotspot",
+      "status": "info",
+      "confidence": "confirmed",
+      "summary": "scripts/test-local.mjs：直近の 46 コミットで 13 回変更、521 行、スコア 6773",
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "scripts/test-local.mjs",
+          "detail": "changes=13; lines=521; score=6773"
+        }
+      ]
+    },
+    {
+      "id": "hotspot/tests/dashboard.test.ts",
+      "check": "hotspot",
+      "status": "info",
+      "confidence": "confirmed",
+      "summary": "tests/dashboard.test.ts：直近の 46 コミットで 9 回変更、443 行、スコア 3987",
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "tests/dashboard.test.ts",
+          "detail": "changes=9; lines=443; score=3987"
+        }
+      ]
+    },
+    {
+      "id": "hotspot/app/pages/dashboard.vue",
+      "check": "hotspot",
+      "status": "info",
+      "confidence": "confirmed",
+      "summary": "app/pages/dashboard.vue：直近の 46 コミットで 10 回変更、273 行、スコア 2730",
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "app/pages/dashboard.vue",
+          "detail": "changes=10; lines=273; score=2730"
+        }
+      ]
+    },
+    {
+      "id": "hotspot/tests/attendance.test.ts",
+      "check": "hotspot",
+      "status": "info",
+      "confidence": "confirmed",
+      "summary": "tests/attendance.test.ts：直近の 46 コミットで 6 回変更、317 行、スコア 1902",
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "tests/attendance.test.ts",
+          "detail": "changes=6; lines=317; score=1902"
+        }
+      ]
+    },
+    {
+      "id": "hotspot/shared/utils/attendance.ts",
+      "check": "hotspot",
+      "status": "info",
+      "confidence": "confirmed",
+      "summary": "shared/utils/attendance.ts：直近の 46 コミットで 8 回変更、206 行、スコア 1648",
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "shared/utils/attendance.ts",
+          "detail": "changes=8; lines=206; score=1648"
+        }
+      ]
+    },
+    {
+      "id": "hotspot/app/pages/records.vue",
+      "check": "hotspot",
+      "status": "info",
+      "confidence": "confirmed",
+      "summary": "app/pages/records.vue：直近の 46 コミットで 7 回変更、232 行、スコア 1624",
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "app/pages/records.vue",
+          "detail": "changes=7; lines=232; score=1624"
+        }
+      ]
+    },
+    {
+      "id": "hotspot/server/utils/auth-repository.ts",
+      "check": "hotspot",
+      "status": "info",
+      "confidence": "confirmed",
+      "summary": "server/utils/auth-repository.ts：直近の 46 コミットで 5 回変更、281 行、スコア 1405",
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "server/utils/auth-repository.ts",
+          "detail": "changes=5; lines=281; score=1405"
+        }
+      ]
+    },
+    {
+      "id": "hotspot/server/utils/webauthn.ts",
+      "check": "hotspot",
+      "status": "info",
+      "confidence": "confirmed",
+      "summary": "server/utils/webauthn.ts：直近の 46 コミットで 7 回変更、161 行、スコア 1127",
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "server/utils/webauthn.ts",
+          "detail": "changes=7; lines=161; score=1127"
+        }
+      ]
+    },
+    {
+      "id": "hotspot/scripts/test-passkey-flow.mjs",
+      "check": "hotspot",
+      "status": "info",
+      "confidence": "confirmed",
+      "summary": "scripts/test-passkey-flow.mjs：直近の 46 コミットで 4 回変更、252 行、スコア 1008",
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "scripts/test-passkey-flow.mjs",
+          "detail": "changes=4; lines=252; score=1008"
+        }
+      ]
+    },
+    {
+      "id": "hotspot/tests/auth-repository.test.ts",
+      "check": "hotspot",
+      "status": "info",
+      "confidence": "confirmed",
+      "summary": "tests/auth-repository.test.ts：直近の 46 コミットで 4 回変更、208 行、スコア 832",
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "tests/auth-repository.test.ts",
+          "detail": "changes=4; lines=208; score=832"
+        }
+      ]
+    },
+    {
+      "id": "hotspot/tests/attendance-update.test.ts",
+      "check": "hotspot",
+      "status": "info",
+      "confidence": "confirmed",
+      "summary": "tests/attendance-update.test.ts：直近の 46 コミットで 5 回変更、151 行、スコア 755",
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "tests/attendance-update.test.ts",
+          "detail": "changes=5; lines=151; score=755"
+        }
+      ]
+    },
+    {
+      "id": "hotspot/tests/monthly-pdf.test.ts",
+      "check": "hotspot",
+      "status": "info",
+      "confidence": "confirmed",
+      "summary": "tests/monthly-pdf.test.ts：直近の 46 コミットで 5 回変更、121 行、スコア 605",
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "tests/monthly-pdf.test.ts",
+          "detail": "changes=5; lines=121; score=605"
+        }
+      ]
+    },
+    {
+      "id": "hotspot/tests/records.test.ts",
+      "check": "hotspot",
+      "status": "info",
+      "confidence": "confirmed",
+      "summary": "tests/records.test.ts：直近の 46 コミットで 4 回変更、138 行、スコア 552",
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "tests/records.test.ts",
+          "detail": "changes=4; lines=138; score=552"
+        }
+      ]
+    },
+    {
+      "id": "hotspot/scripts/test-original-times.mjs",
+      "check": "hotspot",
+      "status": "info",
+      "confidence": "confirmed",
+      "summary": "scripts/test-original-times.mjs：直近の 46 コミットで 3 回変更、140 行、スコア 420",
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "scripts/test-original-times.mjs",
+          "detail": "changes=3; lines=140; score=420"
+        }
+      ]
+    },
+    {
+      "id": "hotspot/tests/migrations.test.ts",
+      "check": "hotspot",
+      "status": "info",
+      "confidence": "confirmed",
+      "summary": "tests/migrations.test.ts：直近の 46 コミットで 4 回変更、102 行、スコア 408",
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "tests/migrations.test.ts",
+          "detail": "changes=4; lines=102; score=408"
+        }
+      ]
+    },
+    {
+      "id": "hotspot/server/api/attendance/clock.post.ts",
+      "check": "hotspot",
+      "status": "info",
+      "confidence": "confirmed",
+      "summary": "server/api/attendance/clock.post.ts：直近の 46 コミットで 8 回変更、50 行、スコア 400",
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "server/api/attendance/clock.post.ts",
+          "detail": "changes=8; lines=50; score=400"
+        }
+      ]
+    },
+    {
+      "id": "hotspot/server/api/reports/month.pdf.get.ts",
+      "check": "hotspot",
+      "status": "info",
+      "confidence": "confirmed",
+      "summary": "server/api/reports/month.pdf.get.ts：直近の 46 コミットで 6 回変更、64 行、スコア 384",
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "server/api/reports/month.pdf.get.ts",
+          "detail": "changes=6; lines=64; score=384"
+        }
+      ]
+    },
+    {
+      "id": "hotspot/tests/attendance-edit.test.ts",
+      "check": "hotspot",
+      "status": "info",
+      "confidence": "confirmed",
+      "summary": "tests/attendance-edit.test.ts：直近の 46 コミットで 2 回変更、183 行、スコア 366",
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "tests/attendance-edit.test.ts",
+          "detail": "changes=2; lines=183; score=366"
+        }
+      ]
+    },
+    {
+      "id": "hotspot/tests/invitation.test.ts",
+      "check": "hotspot",
+      "status": "info",
+      "confidence": "confirmed",
+      "summary": "tests/invitation.test.ts：直近の 46 コミットで 3 回変更、115 行、スコア 345",
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "tests/invitation.test.ts",
+          "detail": "changes=3; lines=115; score=345"
+        }
+      ]
+    },
+    {
+      "id": "hotspot/server/utils/attendance-repository.ts",
+      "check": "hotspot",
+      "status": "info",
+      "confidence": "confirmed",
+      "summary": "server/utils/attendance-repository.ts：直近の 46 コミットで 3 回変更、114 行、スコア 342",
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "server/utils/attendance-repository.ts",
+          "detail": "changes=3; lines=114; score=342"
+        }
+      ]
+    }
+  ],
+  "target": {
+    "commit": "7d14e4eda1ee8c17b3f89a10bcd4e3175a1d7672"
+  }
+}
