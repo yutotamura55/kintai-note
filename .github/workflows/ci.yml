@@ -54,6 +54,13 @@ jobs:
       - run: terraform fmt -check
       - run: terraform init -backend=false -input=false -lockfile=readonly
       - run: terraform validate
+      # TFLint with the ruleset bundled in it (iac/.tflint.hcl). The checksum is the SHA-256 of
+      # tflint_linux_amd64.zip in the release's checksums.txt; update it together with the version.
+      - uses: terraform-linters/setup-tflint@6ffdbaa3be476b3431f7275c26966ef32ff60337 # v6.3.2
+        with:
+          tflint_version: v0.65.0
+          checksums: d4c545ed2e29d6338604b586f34f544f380f70f243aa72f7b484713835eaec61
+      - run: tflint
 
   deploy:
     name: Deploy production

@@ -38,3 +38,15 @@ npm run deploy
 ## Safety
 
 `prevent_destroy` blocks accidental D1 deletion or replacement. Before intentional replacement, export the database and remove that lifecycle guard in a reviewed change. Terraform state is intentionally ignored by Git; back it up or configure a remote backend before collaborating.
+
+## Lint
+
+CI runs TFLint v0.65.0 with `.tflint.hcl` in the `Terraform validation` job. To run the same check locally from the repository root:
+
+```bash
+docker run --rm -v "$PWD/iac:/data" -w /data ghcr.io/terraform-linters/tflint:v0.65.0
+```
+
+`.tflint.hcl` uses only the ruleset bundled with TFLint, so `tflint --init` is not needed. To update TFLint, change `tflint_version` and `checksums` in `../.github/workflows/ci.yml` (the SHA-256 of `tflint_linux_amd64.zip` in the release's `checksums.txt`) and the version in the command above.
+
+Dependabot opens a pull request for each Cloudflare provider update once a week. Merging one changes production through the deploy job, so read the provider's changelog before merging.

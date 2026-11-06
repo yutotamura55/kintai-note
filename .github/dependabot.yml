@@ -27,3 +27,10 @@ updates:
       interval: weekly
     cooldown:
       default-days: 7
+  # Provider updates for iac/. Merging one changes production through the deploy job.
+  - package-ecosystem: terraform
+    directory: /iac
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7

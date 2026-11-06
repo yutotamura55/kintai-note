@@ -50,7 +50,7 @@ production environmentに次も登録します。
 
 ## 依存の更新
 
-GitHub の Dependabot で、npm と GitHub Actions の依存の脆弱性と更新に気づけるようにしています。Terraform の provider と Docker のイメージは対象外です。2026-11-01 にリポジトリの設定で Dependabot alerts と Dependabot security updates を有効にしました。
+GitHub の Dependabot で、npm と GitHub Actions の依存の脆弱性と更新に気づけるようにしています。Terraform の provider（`iac/` の Cloudflare）も、更新を週に 1 回確かめます（#103）。Docker のイメージは対象外です。2026-11-01 にリポジトリの設定で Dependabot alerts と Dependabot security updates を有効にしました。
 
 - **セキュリティ更新：** 脆弱性が公表され、修正版があって更新できる場合に、Dependabot が修正の PR を作ります。有効かどうかは `.github/dependabot.yml` に依存しません。
 - **通常の更新：** `.github/dependabot.yml` で週に 1 回確かめます。公開から 7 日たった版だけを対象にし、npm の minor と patch は 1 つの PR にまとめます。7 日の待ちはセキュリティ更新には適用されません。
@@ -58,7 +58,7 @@ GitHub の Dependabot で、npm と GitHub Actions の依存の脆弱性と更�
 - **見送る更新：** 次の更新は `.github/dependabot.yml` の `ignore` で PR を作らせていません。条件が変わったら、規則を消します。GitHub の文書では `ignore` はセキュリティ更新にも効くとされており、この指定でセキュリティ更新の PR も作られなくなる可能性があります。アラート自体は `ignore` の影響を受けないので、これらの依存の脆弱性はアラートの一覧で確かめられます。
   - `@types/node` のメジャー更新：CI の Node は 22 で、型を新しくすると Node 22 にない API の使用を型検査で見逃すためです。CI の Node を上げるときに、この規則も変えます。
   - `typescript` のメジャー更新：TypeScript 7 では、ESLint が読み込む `ts-api-utils` が読み込みの時点で失敗するためです。
-- **マージ：** Dependabot の PR も、他の PR と同じくメンテナーが確かめてマージします。マージすると本番のデプロイが動きます。
+- **マージ：** Dependabot の PR も、他の PR と同じくメンテナーが確かめてマージします。マージすると本番のデプロイが動きます。Terraform の provider の PR は、マージするとデプロイの job が `terraform apply` を実行するので、provider の変更履歴を読んでからマージします。
 
 `npm audit` は CI に入れていません。入れると、PR と関係のない脆弱性が公表されただけで、すべての PR の必須チェックが失敗し、緊急の修正もマージできなくなるためです。脆弱性には Dependabot のアラートで気づき、修正は専用の PR で行います。
 
